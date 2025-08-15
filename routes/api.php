@@ -36,4 +36,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/followers/{user}', [App\Http\Controllers\API\FollowController::class, 'followers']);
     Route::get('/following/{user}', [App\Http\Controllers\API\FollowController::class, 'following']);
 
+
+   // Route to get the list of users for the follow feature
+    Route::get('/users', [AuthController::class, 'index']);     
 });
