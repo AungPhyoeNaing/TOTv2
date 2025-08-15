@@ -117,7 +117,7 @@ export default function App() {
                 <main className="centered-main">
                     <article aria-busy="true"></article>
                     <p style={{ textAlign: "center" }}>
-                        Loading MiniFeed...
+                        Loading TOT....
                     </p>{" "}
                     {/* Center text */}
                 </main>

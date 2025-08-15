@@ -29,5 +29,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/posts', [PostController::class, 'index']);
     Route::post('/posts', [PostController::class, 'store']);
+    
+    // Follow routes
+    Route::post('/follow/{user}', [App\Http\Controllers\API\FollowController::class, 'follow']);
+    Route::post('/unfollow/{user}', [App\Http\Controllers\API\FollowController::class, 'unfollow']);
+    Route::get('/followers/{user}', [App\Http\Controllers\API\FollowController::class, 'followers']);
+    Route::get('/following/{user}', [App\Http\Controllers\API\FollowController::class, 'following']);
 
 });
