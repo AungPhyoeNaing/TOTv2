@@ -27,6 +27,10 @@ export default function App() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null); // State for general errors
     const [authView, setAuthView] = useState('login'); // 'login' or 'register'
+    const [currentView, setCurrentView] = useState('feed'); // 'feed' or 'profile'
+    const [profileUser, setProfileUser] = useState(null);
+    const [profileData, setProfileData] = useState({ followers: [], following: [] });
+    const [profileLoading, setProfileLoading] = useState(false);
 
     // Check for token and fetch authenticated user on initial load
     useEffect(() => {
@@ -55,7 +59,7 @@ export default function App() {
 
     // Fetch posts and users list once authenticated
     useEffect(() => {
-        if (user) {
+        if (user && currentView === 'feed') {
             // Fetch posts
             apiClient
                 .get("/posts")
@@ -66,18 +70,20 @@ export default function App() {
                     console.error("Error fetching posts:", error)
                 );
 
-            // Fetch users list (you need an endpoint for this)
+            // Fetch users list
             apiClient
-                .get("/users") // Adjust endpoint as needed
+                .get("/users")
                 .then((response) => {
-                    setUsersList(response.data);
+                    console.log("Users response:", response.data);
+                    setUsersList(Array.isArray(response.data) ? response.data : []);
                 })
                 .catch((error) => {
                     console.error("Error fetching users:", error);
                     setError("Failed to load user list.");
+                    setUsersList([]); // Set to empty array on error
                 });
         }
-    }, [user]);
+    }, [user, currentView]);
 
     const handleLogin = (email, password) => {
         setError(null); // Clear previous errors
@@ -180,6 +186,7 @@ export default function App() {
                 setPosts([]);
                 setUsersList([]); // Clear users list on logout
                 setError(null); // Clear errors on logout
+                setCurrentView('feed'); // Reset to feed view
             })
             .catch((error) => {
                 console.error("Logout error:", error);
@@ -190,6 +197,7 @@ export default function App() {
                 setPosts([]);
                 setUsersList([]);
                 setError("Logout encountered an issue, but you are signed out.");
+                setCurrentView('feed'); // Reset to feed view
             });
     };
 
@@ -205,12 +213,85 @@ export default function App() {
             });
     };
 
+    // Function to view user profile
+    const viewProfile = async (userId) => {
+        console.log("Viewing profile for user ID:", userId);
+        setProfileLoading(true);
+        setCurrentView('profile');
+        
+        try {
+            let profileUserData = null;
+            
+            // If viewing own profile, get data from current user
+            if (userId === user.id) {
+                profileUserData = user;
+            } else {
+                // Get all users first to find the specific user
+                const usersResponse = await apiClient.get("/users");
+                console.log("Users response:", usersResponse.data);
+                
+                profileUserData = Array.isArray(usersResponse.data) 
+                    ? usersResponse.data.find(u => u.id === userId)
+                    : null;
+            }
+            
+            console.log("Found user:", profileUserData);
+            
+            // If user not found in users list, create a minimal user object
+            if (!profileUserData) {
+                profileUserData = { id: userId, name: 'User', email: '' };
+            }
+            
+            setProfileUser(profileUserData);
+            
+            // Fetch followers and following
+            console.log("Fetching followers for user:", userId);
+            const followersResponse = await apiClient.get(`/followers/${userId}`);
+            console.log("Followers response:", followersResponse.data);
+            
+            console.log("Fetching following for user:", userId);
+            const followingResponse = await apiClient.get(`/following/${userId}`);
+            console.log("Following response:", followingResponse.data);
+            
+            // Handle paginated responses
+            const followersData = followersResponse.data.data || 
+                                (Array.isArray(followersResponse.data) ? followersResponse.data : []);
+            const followingData = followingResponse.data.data || 
+                                (Array.isArray(followingResponse.data) ? followingResponse.data : []);
+            
+            setProfileData({
+                followers: followersData,
+                following: followingData
+            });
+            
+        } catch (error) {
+            console.error("Error fetching profile ", error);
+            handleError(error, "Failed to load profile.");
+            // Set minimal profile data to avoid blank screen
+            setProfileUser({ id: userId, name: 'User', email: '' });
+            setProfileData({ followers: [], following: [] });
+        } finally {
+            setProfileLoading(false);
+        }
+    };
+
+    // Function to go back to feed
+    const goToFeed = () => {
+        setCurrentView('feed');
+    };
+
+    // Function to go to own profile
+    const goToMyProfile = () => {
+        if (user) {
+            viewProfile(user.id);
+        }
+    };
 
     // Function to follow a user
     const handleFollow = async (userIdToFollow) => {
         try {
             const response = await apiClient.post(`/follow/${userIdToFollow}`);
-            console.log(response.data.message);
+            console.log("Follow response:", response.data);
 
             // Update UI state: Mark user as followed in usersList
             setUsersList(prevUsers =>
@@ -218,6 +299,11 @@ export default function App() {
                     u.id === userIdToFollow ? { ...u, is_following: true } : u
                 )
             );
+
+            // If we're on a profile page, refresh it
+            if (currentView === 'profile' && profileUser && profileUser.id === userIdToFollow) {
+                viewProfile(profileUser.id);
+            }
 
         } catch (error) {
             handleError(error, "Failed to follow user.");
@@ -227,8 +313,8 @@ export default function App() {
     // Function to unfollow a user
     const handleUnfollow = async (userIdToUnfollow) => {
         try {
-            const response = await apiClient.post(`/unfollow/${userIdToUnfollow}`); // Assuming POST for unfollow as per your controller
-            console.log(response.data.message);
+            const response = await apiClient.post(`/unfollow/${userIdToUnfollow}`);
+            console.log("Unfollow response:", response.data);
 
             // Update UI state: Mark user as not followed in usersList
             setUsersList(prevUsers =>
@@ -236,6 +322,11 @@ export default function App() {
                     u.id === userIdToUnfollow ? { ...u, is_following: false } : u
                 )
             );
+
+            // If we're on a profile page, refresh it
+            if (currentView === 'profile' && profileUser && profileUser.id === userIdToUnfollow) {
+                viewProfile(profileUser.id);
+            }
 
         } catch (error) {
              handleError(error, "Failed to unfollow user.");
@@ -285,6 +376,27 @@ export default function App() {
                     </ul>
                     {user && (
                         <ul>
+                            {currentView === 'profile' ? (
+                                <li>
+                                    <button
+                                        className="secondary outline"
+                                        onClick={goToFeed}
+                                        style={{ marginRight: '10px' }}
+                                    >
+                                        Back to Feed
+                                    </button>
+                                </li>
+                            ) : (
+                                <li>
+                                    <button
+                                        className="secondary outline"
+                                        onClick={goToMyProfile}
+                                        style={{ marginRight: '10px' }}
+                                    >
+                                        My Profile
+                                    </button>
+                                </li>
+                            )}
                             <li>
                                 <button
                                     className="secondary outline logout-button"
@@ -301,20 +413,33 @@ export default function App() {
             <main className="centered-main">
                 {error && <p style={{ color: 'red' }}>{error}</p>} {/* Display general errors */}
                 {user ? (
-                    <>
-                        <Feed
-                            user={user}
-                            posts={posts}
-                            onCreatePost={handleCreatePost}
-                        />
-                         {/* Display list of users to follow/unfollow */}
-                        <UserList
-                            users={usersList}
+                    currentView === 'feed' ? (
+                        <>
+                            <Feed
+                                user={user}
+                                posts={posts}
+                                onCreatePost={handleCreatePost}
+                            />
+                             {/* Display list of users to follow/unfollow */}
+                            <UserList
+                                users={Array.isArray(usersList) ? usersList : []}
+                                currentUser={user}
+                                onFollow={handleFollow}
+                                onUnfollow={handleUnfollow}
+                                onViewProfile={viewProfile} // Pass viewProfile function
+                            />
+                        </>
+                    ) : (
+                        <ProfileView 
+                            profileUser={profileUser}
+                            profileData={profileData}
                             currentUser={user}
+                            loading={profileLoading}
                             onFollow={handleFollow}
                             onUnfollow={handleUnfollow}
+                            onViewProfile={viewProfile}
                         />
-                    </>
+                    )
                 ) : (
                     authView === 'login' ? (
                         <Login onLogin={handleLogin} onSwitchToRegister={() => setAuthView('register')} />
@@ -379,8 +504,6 @@ function Login({ onLogin, onSwitchToRegister }) {
                     Register here
                 </button>
             </p>
-            {/* Keep the footer content if needed, or remove for cleaner login */}
-            {/* <footer style={{ marginTop: "2rem" }}> ... </footer> */}
         </section>
     );
 }
@@ -521,9 +644,11 @@ function CreatePostForm({ onCreatePost }) {
     );
 }
 
-// New Component: Display a list of users with follow/unfollow buttons
-function UserList({ users, currentUser, onFollow, onUnfollow }) {
-    if (users.length === 0) {
+// Updated UserList Component with profile view button
+function UserList({ users, currentUser, onFollow, onUnfollow, onViewProfile }) {
+    const validUsers = Array.isArray(users) ? users : [];
+    
+    if (validUsers.length === 0) {
         return <p>No other users found.</p>;
     }
 
@@ -531,16 +656,26 @@ function UserList({ users, currentUser, onFollow, onUnfollow }) {
         <section>
             <h4>Users</h4>
             <ul style={{ listStyleType: 'none', padding: 0 }}>
-                {users.map((user) => {
+                {validUsers.map((user) => {
                     // Don't show follow button for the current user
                     if (user.id === currentUser.id) return null;
 
                     return (
-                         <li key={user.id} style={{ marginBottom: '10px', padding: '5px', border: '1px solid #ccc' }}>
-                            <strong>{user.name}</strong> ({user.email})
+                         <li key={user.id} style={{ marginBottom: '10px', padding: '5px', border: '1px solid #ccc', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div>
+                                <strong>{user.name}</strong> ({user.email})
+                                <button
+                                    onClick={() => {
+                                        console.log("View profile clicked for user:", user.id);
+                                        onViewProfile(user.id);
+                                    }}
+                                    style={{ marginLeft: '10px' }}
+                                    className="secondary"
+                                >
+                                    View Profile
+                                </button>
+                            </div>
                             {/* Check if the current user is already following this user */}
-                            {/* This assumes your user object includes an 'is_following' boolean.
-                                 If not, you might need to manage it locally or fetch status. */}
                             {user.is_following !== undefined ? ( // Check if status is available
                                 user.is_following ? (
                                     <button
@@ -567,5 +702,192 @@ function UserList({ users, currentUser, onFollow, onUnfollow }) {
                 })}
             </ul>
         </section>
+    );
+}
+
+// New ProfileView Component
+function ProfileView({ profileUser, profileData, currentUser, loading, onFollow, onUnfollow, onViewProfile }) {
+    const [activeTab, setActiveTab] = useState('following');
+
+    console.log("ProfileView props:", { profileUser, profileData, loading });
+
+    if (loading) {
+        return <p style={{ textAlign: "center", padding: "20px" }}>Loading profile...</p>;
+    }
+
+    if (!profileUser) {
+        return <p style={{ textAlign: "center", padding: "20px" }}>User not found</p>;
+    }
+
+    const isOwnProfile = profileUser.id === currentUser.id;
+    const isFollowing = profileUser.is_following || false;
+
+    const handleFollowAction = () => {
+        if (isFollowing) {
+            onUnfollow(profileUser.id);
+        } else {
+            onFollow(profileUser.id);
+        }
+    };
+
+    return (
+        <div className="profile-container">
+            <div className="profile-header" style={{ display: 'flex', alignItems: 'center', marginBottom: '30px', paddingBottom: '20px', borderBottom: '1px solid #eee' }}>
+                <div className="profile-avatar">
+                    <img 
+                        src={'https://placehold.co/120'} 
+                        alt={profileUser.name} 
+                        style={{ width: '120px', height: '120px', borderRadius: '50%', objectFit: 'cover', marginRight: '30px' }}
+                    />
+                </div>
+                <div className="profile-info">
+                    <h1 style={{ margin: '0 0 10px 0' }}>{profileUser.name || 'Unknown User'}</h1>
+                    <p style={{ margin: '5px 0', color: '#666' }}>@{profileUser.email || 'No email'}</p>
+                    
+                    <div className="profile-stats" style={{ display: 'flex', gap: '20px', margin: '15px 0' }}>
+                        <span><strong>{Array.isArray(profileData.following) ? profileData.following.length : 0}</strong> Following</span>
+                        <span><strong>{Array.isArray(profileData.followers) ? profileData.followers.length : 0}</strong> Followers</span>
+                    </div>
+
+                    {!isOwnProfile && (
+                        <button 
+                            className={`follow-button ${isFollowing ? 'following' : ''}`}
+                            onClick={handleFollowAction}
+                            style={{
+                                backgroundColor: isFollowing ? '#fff' : '#1da1f2',
+                                color: isFollowing ? '#1da1f2' : '#fff',
+                                border: isFollowing ? '1px solid #1da1f2' : 'none',
+                                padding: '10px 20px',
+                                borderRadius: '25px',
+                                cursor: 'pointer',
+                                fontWeight: 'bold'
+                            }}
+                        >
+                            {isFollowing ? 'Unfollow' : 'Follow'}
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            <div className="profile-tabs" style={{ display: 'flex', borderBottom: '1px solid #eee', marginBottom: '20px' }}>
+                <button 
+                    className={activeTab === 'following' ? 'active' : ''}
+                    onClick={() => setActiveTab('following')}
+                    style={{
+                        padding: '15px 20px',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        color: activeTab === 'following' ? '#1da1f2' : '#666',
+                        borderBottom: activeTab === 'following' ? '3px solid #1da1f2' : '3px solid transparent'
+                    }}
+                >
+                    Following ({Array.isArray(profileData.following) ? profileData.following.length : 0})
+                </button>
+                <button 
+                    className={activeTab === 'followers' ? 'active' : ''}
+                    onClick={() => setActiveTab('followers')}
+                    style={{
+                        padding: '15px 20px',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        color: activeTab === 'followers' ? '#1da1f2' : '#666',
+                        borderBottom: activeTab === 'followers' ? '3px solid #1da1f2' : '3px solid transparent'
+                    }}
+                >
+                    Followers ({Array.isArray(profileData.followers) ? profileData.followers.length : 0})
+                </button>
+            </div>
+
+            <div className="profile-content">
+               {activeTab === 'following' && (
+    <UserGrid 
+        users={Array.isArray(profileData.following) ? profileData.following : []} 
+        currentUser={currentUser}
+        onFollow={onFollow}
+        onUnfollow={onUnfollow}
+        onViewProfile={onViewProfile}
+        showFollowButton={false} // Don't show follow buttons for users you're already following
+    />
+)}
+{activeTab === 'followers' && (
+    <UserGrid 
+        users={Array.isArray(profileData.followers) ? profileData.followers : []} 
+        currentUser={currentUser}
+        onFollow={onFollow}
+        onUnfollow={onUnfollow}
+        onViewProfile={onViewProfile}
+        showFollowButton={true} // Show follow buttons for followers (who might not be followed yet)
+    />
+)}
+            </div>
+        </div>
+    );
+}
+
+// User Grid Component for displaying followers/following
+// User Grid Component for displaying followers/following
+function UserGrid({ users, currentUser, onFollow, onUnfollow, onViewProfile, showFollowButton = true }) {
+    console.log("UserGrid users:", users);
+    
+    // Ensure users is an array
+    const validUsers = Array.isArray(users) ? users : [];
+    
+    return (
+        <div className="user-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '20px' }}>
+            {validUsers.length === 0 ? (
+                <p>No users found</p>
+            ) : (
+                validUsers.map(user => (
+                    <div key={user.id} className="user-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px', border: '1px solid #eee', borderRadius: '8px', background: '#fff', textAlign: 'center' }}>
+                        <div 
+                            className="user-avatar" 
+                            onClick={() => onViewProfile(user.id)}
+                            style={{ marginBottom: '15px', cursor: 'pointer' }}
+                        >
+                            <img 
+                                src={'https://placehold.co/50'} 
+                                alt={user.name} 
+                                style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover' }}
+                            />
+                        </div>
+                        <div className="user-details">
+                            <h3 onClick={() => onViewProfile(user.id)} style={{ margin: '0 0 5px 0', fontSize: '1.1rem', cursor: 'pointer' }}>
+                                {user.name || 'Unknown User'}
+                            </h3>
+                            <p style={{ margin: '0 0 15px 0', color: '#666', fontSize: '0.9rem' }}>@{user.email || 'No email'}</p>
+                        </div>
+                        {/* Only show follow button if explicitly requested (e.g., in followers list) and not viewing own profile */}
+                        {showFollowButton && user.id !== currentUser.id && (
+                            <button 
+                                className={`follow-button small ${user.is_following ? 'following' : ''}`}
+                                onClick={() => {
+                                    if (user.is_following) {
+                                        onUnfollow(user.id);
+                                    } else {
+                                        onFollow(user.id);
+                                    }
+                                }}
+                                style={{
+                                    backgroundColor: user.is_following ? '#fff' : '#1da1f2',
+                                    color: user.is_following ? '#1da1f2' : '#fff',
+                                    border: user.is_following ? '1px solid #1da1f2' : 'none',
+                                    padding: '5px 15px',
+                                    borderRadius: '25px',
+                                    cursor: 'pointer',
+                                    fontWeight: 'bold',
+                                    fontSize: '0.9rem'
+                                }}
+                            >
+                                {user.is_following ? 'Unfollow' : 'Follow'}
+                            </button>
+                        )}
+                    </div>
+                ))
+            )}
+        </div>
     );
 }

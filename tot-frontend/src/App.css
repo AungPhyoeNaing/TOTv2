@@ -132,6 +132,53 @@ form input:focus, form textarea:focus, form select:focus {
   margin-top: 2rem;
 }
 
+/* Profile Styles */
+.profile-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.profile-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.profile-info h1 {
+    margin: 0 0 10px 0;
+    font-size: 2rem;
+}
+
+.profile-info p {
+    margin: 5px 0;
+    color: #666;
+}
+
+.profile-bio {
+    margin: 15px 0 !important;
+    color: #333 !important;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .profile-header {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .profile-avatar {
+        margin-right: 0;
+        margin-bottom: 20px;
+    }
+    
+    .user-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 @media (min-width: 600px) {
   .posts-grid {
     grid-template-columns: repeat(2, 1fr);
