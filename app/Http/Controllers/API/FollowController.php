@@ -4,7 +4,10 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+
+
 use Illuminate\Http\Request;
+
 
 class FollowController extends Controller
 {
@@ -55,6 +58,12 @@ class FollowController extends Controller
     {
         $followers = $user->followers()->paginate(20);
         
+        // Add is_following status for each follower
+        $followers->getCollection()->transform(function ($follower) {
+            $follower->is_following = auth()->user()->isFollowing($follower);
+            return $follower;
+        });
+        
         return response()->json($followers, 200);
     }
 
@@ -64,6 +73,12 @@ class FollowController extends Controller
     public function following(User $user)
     {
         $following = $user->following()->paginate(20);
+        
+        // Add is_following status for each followed user
+        $following->getCollection()->transform(function ($followedUser) {
+            $followedUser->is_following = auth()->user()->isFollowing($followedUser);
+            return $followedUser;
+        });
         
         return response()->json($following, 200);
     }

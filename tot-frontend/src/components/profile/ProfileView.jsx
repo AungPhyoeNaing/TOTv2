@@ -79,7 +79,7 @@ export default function ProfileView({
             onFollow={onFollow}
             onUnfollow={onUnfollow}
             onViewProfile={onViewProfile}
-            showFollowButton={false}
+            showFollowButton={true}
           />
         )}
         {activeTab === 'followers' && (
