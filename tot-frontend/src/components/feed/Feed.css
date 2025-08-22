@@ -1,0 +1,42 @@
+/* src/components/feed/Feed.css */
+
+/* You can keep or modify the styles from App.css .posts-grid */
+.feed {
+  /* Styles specific to the Feed section container if needed */
+}
+
+/* Example: Override or refine the grid from App.css if desired */
+/* .posts-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: 1fr;  /* Default single column *
+  margin-top: 2rem;
+} */
+
+/* @media (min-width: 600px) {
+  .posts-grid {
+    grid-template-columns: repeat(2, 1fr); /* Two columns on medium screens *
+  }
+}
+
+@media (min-width: 900px) {
+  .posts-grid {
+    grid-template-columns: repeat(2, 1fr); /* Keep 2 columns or adjust *
+  }
+} */
+
+/* Style the "Hello, User!" header */
+.feed > header h3 {
+  color: #ffffff;
+  margin-bottom: 1.5rem;
+  text-align: left; /* Align left if preferred */
+}
+
+/* Style the "Feed" heading */
+.feed > h4 {
+  color: #cccccc;
+  margin-bottom: 1rem;
+  text-align: left; /* Align left if preferred */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 0.5rem;
+}

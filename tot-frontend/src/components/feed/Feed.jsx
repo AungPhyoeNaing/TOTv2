@@ -1,7 +1,12 @@
+// src/components/feed/Feed.jsx
 import React from "react";
 import CreatePostForm from "./CreatePostForm.jsx";
+// --- Import the new Post component ---
+import Post from "./Post.jsx";
+// --- End import ---
+import "./Feed.css"; // Optional CSS
 
-export default function Feed({ user, posts, onCreatePost }) {
+const Feed = ({ user, posts, onCreatePost, onDeletePost }) => { // Accept onDeletePost prop
   return (
     <section className="feed">
       <header>
@@ -10,27 +15,25 @@ export default function Feed({ user, posts, onCreatePost }) {
       <CreatePostForm onCreatePost={onCreatePost} />
       <hr />
       <h4>Feed</h4>
-      
+
       <div className="posts-grid">
         {posts.length > 0 ? (
+          // --- Render Post components instead of inline JSX ---
           posts.map((post) => (
-            <article key={post.id} className="post-card">
-              <header>
-                <strong>{post.user.name}</strong> 
-                <small>({post.user.email})</small>
-              </header>
-              <p>{post.body}</p>
-              <footer>
-                <small>
-                  Posted: {new Date(post.created_at).toLocaleString()}
-                </small>
-              </footer>
-            </article>
+            <Post
+              key={post.id}
+              post={post}
+              currentUser={user} // Pass current user for auth checks (e.g., delete)
+              onDeletePost={onDeletePost} // Pass the delete handler function
+            />
           ))
+          // --- End rendering Post components ---
         ) : (
           <p>No posts yet. Be the first!</p>
         )}
       </div>
     </section>
   );
-}
+};
+
+export default Feed;
