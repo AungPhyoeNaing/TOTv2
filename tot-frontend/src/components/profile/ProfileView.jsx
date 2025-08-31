@@ -1,3 +1,4 @@
+// src/components/profile/ProfileView.jsx
 import React, { useState } from "react";
 import UserGrid from "./UserGrid.jsx";
 
@@ -8,7 +9,8 @@ export default function ProfileView({
   loading, 
   onFollow, 
   onUnfollow, 
-  onViewProfile 
+  onViewProfile,
+  onChat // <-- Accept the onChat prop for initiating chats
 }) {
   const [activeTab, setActiveTab] = useState('following');
 
@@ -20,61 +22,93 @@ export default function ProfileView({
     return <p className="error">User not found</p>;
   }
 
+  // Determine if the profile being viewed is the current user's own profile
   const isOwnProfile = profileUser.id === currentUser.id;
-  const isFollowing = profileUser.is_following || false;
+  
+  // Determine if the current user is following the profile user
+  // Use optional chaining and nullish coalescing for safety
+  const isFollowing = profileUser.is_following ?? false;
 
+  // Handler for follow/unfollow button click
   const handleFollowAction = () => {
-    isFollowing ? onUnfollow(profileUser.id) : onFollow(profileUser.id);
+    if (isFollowing) {
+      onUnfollow(profileUser.id);
+    } else {
+      onFollow(profileUser.id);
+    }
   };
 
   return (
     <div className="profile-container">
+      {/* Profile Header Section */}
       <div className="profile-header">
+        {/* Profile Avatar/Image */}
         <div className="profile-avatar">
           <img 
-            src="https://placehold.co/120" 
-            alt={profileUser.name} 
+            src="https://placehold.co/120" // Placeholder image, replace with actual user avatar if available
+            alt={`${profileUser.name}'s avatar`} 
           />
         </div>
+        
+        {/* Profile Information */}
         <div className="profile-info">
+          {/* User's Name and Handle */}
           <h1>{profileUser.name || 'Unknown User'}</h1>
           <p>@{profileUser.email || 'No email'}</p>
           
+          {/* Followers/Following Stats */}
           <div className="profile-stats">
-            <span><strong>{profileData.following.length}</strong> Following</span>
-            <span><strong>{profileData.followers.length}</strong> Followers</span>
+            <span><strong>{profileData.following?.length ?? 0}</strong> Following</span>
+            <span><strong>{profileData.followers?.length ?? 0}</strong> Followers</span>
           </div>
 
+          {/* Action Buttons (Follow/Unfollow and Message) */}
+          {/* Only show action buttons if it's not the user's own profile */}
           {!isOwnProfile && (
-            <button 
-              className={`follow-button ${isFollowing ? 'following' : ''}`}
-              onClick={handleFollowAction}
-            >
-              {isFollowing ? 'Unfollow' : 'Follow'}
-            </button>
+            <div className="profile-actions"> {/* Container for buttons */}
+              {/* Follow/Unfollow Button */}
+              <button 
+                className={`follow-button ${isFollowing ? 'following' : ''}`}
+                onClick={handleFollowAction}
+              >
+                {isFollowing ? 'Unfollow' : 'Follow'}
+              </button>
+              
+              {/* Message Button */}
+              {/* Added onClick handler to initiate chat with this user */}
+              <button 
+                className="message-button" // You can style this class in your CSS
+                onClick={() => onChat(profileUser)} // Pass the entire profileUser object
+              >
+                Message
+              </button>
+            </div>
           )}
         </div>
       </div>
 
+      {/* Profile Tabs for Following/Followers */}
       <div className="profile-tabs">
         <button 
           className={activeTab === 'following' ? 'active' : ''}
           onClick={() => setActiveTab('following')}
         >
-          Following ({profileData.following.length})
+          Following ({profileData.following?.length ?? 0})
         </button>
         <button 
           className={activeTab === 'followers' ? 'active' : ''}
           onClick={() => setActiveTab('followers')}
         >
-          Followers ({profileData.followers.length})
+          Followers ({profileData.followers?.length ?? 0})
         </button>
       </div>
 
+      {/* Tab Content Area */}
       <div className="profile-content">
+        {/* Display list of users being followed */}
         {activeTab === 'following' && (
           <UserGrid 
-            users={profileData.following} 
+            users={profileData.following ?? []} 
             currentUser={currentUser}
             onFollow={onFollow}
             onUnfollow={onUnfollow}
@@ -82,9 +116,11 @@ export default function ProfileView({
             showFollowButton={true}
           />
         )}
+        
+        {/* Display list of followers */}
         {activeTab === 'followers' && (
           <UserGrid 
-            users={profileData.followers} 
+            users={profileData.followers ?? []} 
             currentUser={currentUser}
             onFollow={onFollow}
             onUnfollow={onUnfollow}

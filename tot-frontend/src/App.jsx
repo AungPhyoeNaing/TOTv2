@@ -8,6 +8,7 @@ import Register from "./components/auth/Register.jsx";
 import Feed from "./components/feed/Feed.jsx";
 import UserList from "./components/profile/UserList.jsx";
 import ProfileView from "./components/profile/ProfileView.jsx";
+import Chat from "./components/chat/Chat.jsx"; 
 import { logout } from "./api/authService";
 // --- Import the deletePost function ---
 import { deletePost } from "./api/postService"; // <-- Added Import
@@ -23,6 +24,7 @@ export default function App() {
   const [authView, setAuthView] = useState('login');
   const [currentView, setCurrentView] = useState('feed');
   const [profileUser, setProfileUser] = useState(null);
+  const [chatWithUser, setChatWithUser] = useState(null); 
   const [profileData, setProfileData] = useState({
     followers: [],
     following: []
@@ -85,6 +87,11 @@ export default function App() {
       setPosts([]);
       setUsersList([]);
       setCurrentView('feed');
+      setChatWithUser(null); // <-- Explicitly reset chatWithUser on logout
+    // Consider resetting profile-related states too if needed
+    setProfileUser(null);
+    setProfileData({ followers: [], following: [] });
+    setProfileLoading(false);
     }
   };
 
@@ -120,6 +127,11 @@ export default function App() {
         setError("Failed to delete post.");
       // }
     }
+  };
+
+   const initiateChat = (userToChatWith) => {
+     setChatWithUser(userToChatWith);
+     setCurrentView('chat');
   };
   // --- End New Function ---
 
@@ -215,6 +227,7 @@ export default function App() {
         currentView={currentView}
         onGoToFeed={() => setCurrentView('feed')}
         onGoToMyProfile={() => user && viewProfile(user.id)}
+        onGoToChat={() => setCurrentView('chat')} 
         onLogout={handleLogout}
       />
 
@@ -238,9 +251,10 @@ export default function App() {
                 onFollow={handleFollow}
                 onUnfollow={handleUnfollow}
                 onViewProfile={viewProfile}
+               onChat={initiateChat}
               />
             </>
-          ) : (
+          ) : currentView === 'profile' ? (
             <ProfileView
               profileUser={profileUser}
               profileData={profileData}
@@ -249,10 +263,30 @@ export default function App() {
               onFollow={handleFollow}
               onUnfollow={handleUnfollow}
               onViewProfile={viewProfile}
+              onChat={initiateChat}
             />
-          )
-        ) : (
-          authView === 'login' ? (
+          
+        ) : currentView === 'chat' ? (
+          chatWithUser && chatWithUser.id ? (
+           <Chat
+        sanctumToken={localStorage.getItem("token")} 
+        currentUserId={user.id}
+        otherUserId={chatWithUser?.id} 
+        otherUserName={chatWithUser?.name} 
+      />  ) : (
+      // Render a message or component when there's no user selected for chat
+      <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
+        <h3>You have no recent chats</h3>
+        <p>Select a user to start a conversation.</p>
+        {/* Optionally, provide a link/button back to the user list or feed */}
+        <button onClick={() => setCurrentView('feed')} className="secondary"> {/* Use your button styles */}
+          Back
+        </button>
+      </div>
+    )
+  )
+      : null
+         ) : (authView === 'login' ? (
             <Login
               onLogin={handleAuthSuccess}
               onSwitchToRegister={() => setAuthView('register')}
