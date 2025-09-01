@@ -10,9 +10,9 @@ const server = http.createServer(app);
 // Configure CORS for Socket.IO
 const io = new socketIo.Server(server, {
     cors: {
-        origin: "http://localhost:5173", // Your React app URL
+        origin: "http://localhost:5173", 
         methods: ["GET", "POST"],
-        credentials: true // Important for Sanctum
+        credentials: true 
     }
 });
 
@@ -49,11 +49,9 @@ io.on('connection', (socket) => {
     console.log(`User connected: ${socket.userId} with socket ID: ${socket.id}`);
     connectedUsers[socket.userId] = socket.id;
 
-    // Example: Join a room based on user pair (simplified)
-    // In a real app, you'd likely have a more robust room/ID system
+   
     socket.on('joinChat', (data) => {
-         // data might contain { otherUserId: ... }
-         // Create a consistent room name (e.g., sorted user IDs)
+        
          const userIds = [socket.userId, data.otherUserId].sort();
          const roomName = `chat_${userIds[0]}_${userIds[1]}`;
          socket.join(roomName);

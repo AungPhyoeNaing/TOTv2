@@ -69,12 +69,7 @@ const Chat = ({ sanctumToken, currentUserId, otherUserId, otherUserName }) => {
     // --- End new useEffect ---
 
     useEffect(() => {
-        // This useEffect handles the Socket.IO connection logic
-        // (This part remains largely the same as your current code)
-
-        // It's good practice to reset socket-related state if user changes
-        // but the cleanup function below handles disconnecting.
-
+       
         if (!sanctumToken || !currentUserId || !otherUserId) {
             console.error("Chat: Missing required props for socket connection (sanctumToken, currentUserId, otherUserId)");
             return;
