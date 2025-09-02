@@ -1,4 +1,3 @@
-// src/App.jsx
 import React, { useState, useEffect } from "react";
 import io from "socket.io-client"; // <-- Import Socket.IO Client
 import apiClient from "./api/apiClient";
@@ -34,95 +33,153 @@ export default function App() {
   const [socket, setSocket] = useState(null);
   // --- End Socket.IO state ---
 
-  // Auth check on initial load
+  // --- Modified useEffect Hook: Auth check, data fetch, and Socket.IO setup ---
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (token) {
-      apiClient.get("/user")
-        .then(response => {
-            setUser(response.data);
-            // --- Establish Socket.IO connection after successful auth ---
-            const newSocket = io("http://localhost:3001", { // Adjust URL to your chat server
-                auth: {
-                    token: token // Pass Sanctum token for authentication
-                }
-            });
-            setSocket(newSocket);
-
-            // --- Listen for real-time events ---
-            newSocket.on("connect", () => {
-                console.log("Connected to Socket.IO server for real-time updates");
-            });
-
-            newSocket.on("reactionUpdated", (data) => {
-                console.log("Real-time reaction update received:", data);
-                // Update the posts state with the new reaction counts and user reaction
-                setPosts(prevPosts =>
-                    prevPosts.map(post => {
-                        if (post.id === data.post_id) {
-                            return {
-                                ...post,
-                                likes_count: data.likes_count,
-                                sads_count: data.sads_count,
-                                angries_count: data.angries_count,
-                                reactions_count: data.reactions_count,
-                                user_reaction: data.user_reaction // Reflects the current user's reaction for this post
-                            };
-                        }
-                        return post;
-                    })
-                );
-            });
-
-            newSocket.on("commentAdded", (newComment) => {
-                console.log("Real-time comment added:", newComment);
-                // Update the comment count for the relevant post
-                setPosts(prevPosts =>
-                    prevPosts.map(post => {
-                        if (post.id === newComment.post_id) {
-                            return {
-                                ...post,
-                                comments_count: (post.comments_count || 0) + 1
-                            };
-                        }
-                        return post;
-                    })
-                );
-                // Note: The actual comment content isn't added to the feed's state here.
-                // The Post component should fetch comments when opened or use its own real-time listener.
-            });
-
-            newSocket.on("connect_error", (err) => {
-                 console.error("Socket.IO Connection Error:", err.message);
-                 setError("Real-time updates unavailable.");
-            });
-
-             newSocket.on("disconnect", (reason) => {
-                 console.log("Disconnected from Socket.IO server:", reason);
-                 // Handle disconnection if needed
-            });
-
-            // --- End real-time event listeners ---
-        })
-        .catch(() => {
-          localStorage.removeItem("token");
-          setError("Session expired. Please login again.");
-        })
-        .finally(() => setLoading(false));
-    } else {
+    if (!token) {
       setLoading(false);
+      return;
     }
 
-    // Cleanup function for useEffect - disconnect socket on unmount
-    return () => {
-        if (socket) {
-            socket.disconnect();
-            console.log("Socket.IO disconnected on App unmount");
+    let isMounted = true; // Flag to prevent state updates if component unmounts
+    let newSocketInstance = null; // Keep track of the socket instance locally for cleanup
+
+    const initializeApp = async () => {
+      try {
+        // 1. Authenticate and fetch user data
+        const userResponse = await apiClient.get("/user");
+        if (!isMounted) return; // Stop if component unmounted
+
+        setUser(userResponse.data);
+
+        // 2. Establish Socket.IO connection
+        newSocketInstance = io("http://localhost:3001", {
+          auth: {
+            token: token // Pass Sanctum token for authentication
+          }
+        });
+
+        // Update state with the new socket instance
+        setSocket(newSocketInstance);
+
+        // --- Define named listener functions for explicit cleanup ---
+        const handleConnect = () => {
+          console.log("[Socket] Connected to Socket.IO server for real-time updates");
+        };
+
+        const handleReactionUpdated = (data) => {
+          console.log("[Socket] Real-time reaction update received:", data);
+          // Update the posts state with the new reaction counts and user reaction
+          setPosts(prevPosts =>
+            prevPosts.map(post => {
+              if (post.id === data.post_id) {
+                return {
+                  ...post,
+                  likes_count: data.likes_count,
+                  sads_count: data.sads_count,
+                  angries_count: data.angries_count,
+                  reactions_count: data.reactions_count,
+                  user_reaction: data.user_reaction // Reflects the current user's reaction for this post
+                };
+              }
+              return post;
+            })
+          );
+        };
+
+        const handleCommentAdded = (newComment) => {
+          console.log("[Socket] Real-time comment added (Global Listener):", newComment);
+          // Update the comment count for the relevant post
+          setPosts(prevPosts =>
+            prevPosts.map(post => {
+              if (post.id === newComment.post_id) {
+                // --- FIX: Ensure count is treated as a number ---
+                const currentCount = Number(post.comments_count) || 0;
+                const newCount = currentCount + 1;
+                console.log(`[Socket] Incrementing comment count for post ${post.id}. Old: ${currentCount}, New: ${newCount}`);
+                return {
+                  ...post,
+                  comments_count: newCount // Store the incremented number
+                };
+              }
+              return post;
+            })
+          );
+        };
+
+        const handleConnectError = (err) => {
+          console.error("[Socket] Connection Error:", err.message);
+          if (isMounted) {
+            setError("Real-time updates unavailable.");
+          }
+        };
+
+        const handleDisconnect = (reason) => {
+          console.log("[Socket] Disconnected from Socket.IO server:", reason);
+        };
+
+        // --- Attach the listeners to the new socket instance ---
+        newSocketInstance.on("connect", handleConnect);
+        newSocketInstance.on("reactionUpdated", handleReactionUpdated);
+        newSocketInstance.on("commentAdded", handleCommentAdded);
+        newSocketInstance.on("connect_error", handleConnectError);
+        newSocketInstance.on("disconnect", handleDisconnect);
+
+        console.log("[App.jsx] Socket.IO connection established and listeners attached.");
+
+        // 3. Fetch initial data (posts, users)
+        const [postsRes, usersRes] = await Promise.all([
+          apiClient.get("/posts"),
+          apiClient.get("/users")
+        ]);
+
+        if (!isMounted) return;
+
+        setPosts(postsRes.data);
+        setUsersList(Array.isArray(usersRes.data) ? usersRes.data : []);
+
+      } catch (error) {
+        console.error("App initialization error:", error);
+        if (!isMounted) return;
+        localStorage.removeItem("token");
+        setError("Session expired. Please login again.");
+      } finally {
+        if (isMounted) {
+          setLoading(false);
         }
+      }
+    };
+
+    initializeApp();
+
+    // --- Cleanup function for useEffect ---
+    return () => {
+      isMounted = false; // Set flag on unmount
+      console.log("[App.jsx useEffect Cleanup] Running...");
+
+      if (newSocketInstance) {
+        // --- Explicitly remove listeners using the named functions ---
+        // This is the key part of the fix to prevent duplication
+        newSocketInstance.off("connect", handleConnect);
+        newSocketInstance.off("reactionUpdated", handleReactionUpdated);
+        newSocketInstance.off("commentAdded", handleCommentAdded);
+        newSocketInstance.off("connect_error", handleConnectError);
+        newSocketInstance.off("disconnect", handleDisconnect);
+
+        newSocketInstance.disconnect();
+        console.log("[App.jsx useEffect Cleanup] Socket.IO listeners removed and disconnected.");
+
+        // Ensure state is also cleared if this was the active socket
+        // Check if the socket in state is the one we are cleaning up
+        if (socket === newSocketInstance) {
+            setSocket(null);
+        }
+      }
     };
   }, []); // Run only once on mount
 
-  // Fetch data when authenticated/view changes
+  // --- useEffect Hook: Fetch data when authenticated/view changes ---
+  // This useEffect remains largely unchanged, but now relies on the robust socket setup above
   useEffect(() => {
     if (!user) return;
 
@@ -146,6 +203,7 @@ export default function App() {
     }
   }, [user, currentView]); // Depend on user and currentView
 
+  // --- Handler Functions ---
   const handleAuthSuccess = (token, user) => {
     localStorage.setItem("token", token);
     setUser(user);
@@ -275,6 +333,7 @@ export default function App() {
       setError("Failed to unfollow user");
     }
   };
+  // --- End Handler Functions ---
 
   if (loading) {
     return (
@@ -306,7 +365,7 @@ export default function App() {
         {user ? (
           currentView === 'feed' ? (
             <>
-              /* Pass the socket instance to Feed */
+              {/* Pass the socket instance to Feed */}
               <Feed
                 user={user}
                 posts={posts}

@@ -1,4 +1,3 @@
-// server.js
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -11,7 +10,7 @@ const server = http.createServer(app);
 // Configure CORS for Socket.IO
 const io = new socketIo.Server(server, {
     cors: {
-        origin: "http://localhost:5173",
+        origin: "http://localhost:5173", // Adjust if your frontend runs elsewhere
         methods: ["GET", "POST"],
         credentials: true
     }
@@ -38,32 +37,32 @@ io.use(async (socket, next) => {
         });
 
         socket.userId = response.data.id; // Assuming user ID is in response
-        console.log(`Authenticated user ID: ${socket.userId}`);
+        console.log(`[Auth] Authenticated user ID: ${socket.userId}`);
         next();
     } catch (error) {
-        console.error("Sanctum Authentication Error:", error.message);
+        console.error("[Auth] Sanctum Authentication Error:", error.message);
         next(new Error("Authentication error: Invalid token"));
     }
 });
 
 io.on('connection', (socket) => {
-    console.log(`User connected: ${socket.userId} with socket ID: ${socket.id}`);
+    console.log(`[Connection] User connected: ${socket.userId} with socket ID: ${socket.id}`);
     connectedUsers[socket.userId] = socket.id;
 
     socket.on('joinChat', (data) => {
         const userIds = [socket.userId, data.otherUserId].sort();
         const roomName = `chat_${userIds[0]}_${userIds[1]}`;
         socket.join(roomName);
-        console.log(`User ${socket.userId} joined room ${roomName}`);
+        console.log(`[Chat] User ${socket.userId} joined room ${roomName}`);
     });
 
-    // --- New Event Listener: Listen for reaction updates from client ---
+    // --- Event Listener: Listen for reaction updates from client ---
     // Client emits this after successfully calling POST /api/posts/{post}/reactions/toggle
     socket.on('postReactionUpdated', async (data) => {
-        console.log(`Reaction update notification for post ${data.postId} from user ${socket.userId}:`, data);
+        console.log(`[Reaction] Update notification for post ${data.postId} from user ${socket.userId}:`, data);
 
         if (!data.postId) {
-            console.error("Missing postId in postReactionUpdated data:", data);
+            console.error("[Reaction] Missing postId in postReactionUpdated data:", data);
             return;
         }
 
@@ -75,12 +74,10 @@ io.on('connection', (socket) => {
                 timeout: 5000
             });
 
-            const currentUserReaction = userReactionRes.data.reaction || null; // Expecting 'like', 'sad', 'angry', or null
+            const currentUserReaction = userReactionRes.data.reaction || null;
 
             // 2. Get the post details to get the latest counts
-            // This assumes the GET /api/posts endpoint returns posts with counts
-            // or that your Post API Resource includes these counts.
-            // You might need to adjust this logic if counts are fetched differently.
+            // Note: Fetching all posts might be inefficient for large lists.
             const postsRes = await axios.get(`http://localhost:8000/api/posts`, {
                  headers: { 'Authorization': `Bearer ${socket.handshake.auth.token}` },
                  timeout: 5000
@@ -90,12 +87,11 @@ io.on('connection', (socket) => {
             const post = postsRes.data.find(p => p.id == data.postId);
 
             if (!post) {
-                console.error(`Post with ID ${data.postId} not found in /api/posts response.`);
+                console.error(`[Reaction] Post with ID ${data.postId} not found in /api/posts response.`);
                 return;
             }
 
             // Ensure counts are available on the post object
-            // These should ideally be included by your PostController or Post API Resource
             const likesCount = post.likes_count ?? 0;
             const sadsCount = post.sads_count ?? 0;
             const angriesCount = post.angries_count ?? 0;
@@ -108,29 +104,27 @@ io.on('connection', (socket) => {
                 sads_count: sadsCount,
                 angries_count: angriesCount,
                 reactions_count: totalReactions,
-                user_reaction: currentUserReaction // 'like', 'sad', 'angry', or null
+                user_reaction: currentUserReaction
             };
 
             // --- Emit the event to all connected clients ---
             io.emit('reactionUpdated', reactionUpdatePayload);
-            console.log("Emitted 'reactionUpdated' to all clients:", reactionUpdatePayload);
+            console.log("[Reaction] Emitted 'reactionUpdated' to all clients:", reactionUpdatePayload);
 
         } catch (error) {
-            console.error(`Error fetching updated reaction/comment data for post ${data.postId}:`, error.response?.data || error.message);
-            // Optionally, emit an error event back to the originating socket
-            // socket.emit('realtimeUpdateError', { postId: data.postId, type: 'reaction', error: 'Could not fetch updated data' });
+            console.error(`[Reaction] Error fetching updated data for post ${data.postId}:`, error.response?.data || error.message);
         }
     });
-    // --- End New Event Listener ---
+    // --- End Event Listener ---
 
-    // --- New Event Listener: Listen for new comments from client ---
+    // --- Event Listener: Listen for new comments from client ---
     // Client emits this after successfully calling POST /api/posts/{post}/comments
     socket.on('postCommentAdded', async (data) => {
-        console.log(`Comment added notification for post ${data.postId} from user ${socket.userId}:`, data);
+        console.log(`[Comment] Added notification for post ${data.postId} from user ${socket.userId}:`, data);
 
         if (!data.postId || !data.comment) {
-             console.error("Invalid comment data received in postCommentAdded:", data);
-             return; // Don't emit if data is malformed
+             console.error("[Comment] Invalid comment data received in postCommentAdded:", data);
+             return;
         }
 
         try {
@@ -143,26 +137,26 @@ io.on('connection', (socket) => {
                 newComment.post_id = data.postId; // Attach post_id if missing
             }
 
+            // --- ADDITIONAL LOGGING FOR DEBUGGING ---
+            console.log(`[Comment] [Server] About to emit 'commentAdded' to all clients for comment:`, newComment);
             // --- Emit the event to all connected clients ---
             io.emit('commentAdded', newComment);
-            console.log("Emitted 'commentAdded' to all clients:", newComment);
+            console.log(`[Comment] [Server] Emitted 'commentAdded' to all clients.`);
 
         } catch (error) {
-             console.error(`Error processing new comment notification for post ${data.postId}:`, error.response?.data || error.message);
-             // Optionally, emit an error event back to the originating socket
-             // socket.emit('realtimeUpdateError', { postId: data.postId, type: 'comment', error: 'Could not process comment' });
+             console.error(`[Comment] Error processing new comment notification for post ${data.postId}:`, error.response?.data || error.message);
         }
     });
-    // --- End New Event Listener ---
+    // --- End Event Listener ---
 
 
     socket.on('sendMessage', async (messageData) => {
-        console.log('Received message ', messageData);
+        console.log('[Message] Received message ', messageData);
 
         try {
             // Validate sender
             if (messageData.sender_id != socket.userId) {
-               console.error("Sender ID mismatch");
+               console.error("[Message] Sender ID mismatch");
                return socket.emit('messageError', { error: 'Unauthorized sender' });
             }
 
@@ -175,7 +169,7 @@ io.on('connection', (socket) => {
             });
 
             const savedMessage = response.data;
-            console.log("Message saved to DB:", savedMessage);
+            console.log("[Message] Message saved to DB:", savedMessage);
 
             // 2. Broadcast message to the relevant room/users
             const userIds = [savedMessage.sender_id, savedMessage.recipient_id].sort();
@@ -184,27 +178,27 @@ io.on('connection', (socket) => {
             const recipientSocketId = connectedUsers[savedMessage.recipient_id];
             if (recipientSocketId) {
                 io.to(recipientSocketId).emit('receiveMessage', savedMessage);
-                console.log(`Message sent to recipient ${savedMessage.recipient_id}`);
+                console.log(`[Message] Message sent to recipient ${savedMessage.recipient_id}`);
             } else {
-                 console.log(`Recipient ${savedMessage.recipient_id} is offline`);
+                 console.log(`[Message] Recipient ${savedMessage.recipient_id} is offline`);
             }
 
             // Also send confirmation back to sender
             socket.emit('messageSent', savedMessage);
 
         } catch (error) {
-            console.error("Error processing message:", error.response?.data || error.message);
+            console.error("[Message] Error processing message:", error.response?.data || error.message);
             socket.emit('messageError', { error: 'Failed to send message' });
         }
     });
 
     socket.on('disconnect', () => {
-        console.log(`User disconnected: ${socket.userId}`);
+        console.log(`[Disconnection] User disconnected: ${socket.userId}`);
         delete connectedUsers[socket.userId];
     });
 });
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
-    console.log(`Server (Chat + Real-time Updates) running on port ${PORT}`);
+    console.log(`[Server] Server (Chat + Real-time Updates) running on port ${PORT}`);
 });
