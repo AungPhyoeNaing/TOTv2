@@ -1,14 +1,12 @@
 // src/components/feed/Post.jsx
-import React, { useState, useEffect } from "react"; // Ensure useState and useEffect are imported
+import React, { useState, useEffect } from "react";
 import {
   toggleReaction,
   addComment,
   getComments,
   sharePost,
-} from "../../api/postService"; // Ensure the path is correct
+} from "../../api/postService";
 import "./Post.css";
-
-
 
 // --- ReactionButton Component ---
 const ReactionButton = ({ type, count, isActive, onClick, disabled, ariaLabel }) => (
@@ -23,7 +21,8 @@ const ReactionButton = ({ type, count, isActive, onClick, disabled, ariaLabel })
 );
 // --- End ReactionButton ---
 
-const Post = ({ post, currentUser, onDeletePost }) => {
+// Accept the socket prop
+const Post = ({ post, currentUser, onDeletePost, socket }) => { // <-- Accept socket prop
   // --- State initialization ---
   const [counts, setCounts] = useState({
     reactions: post.reactions_count || 0,
@@ -31,14 +30,12 @@ const Post = ({ post, currentUser, onDeletePost }) => {
     shares: post.shares_count || 0,
   });
 
-  // Initialize local reactions state from props
   const [reactions, setReactions] = useState({
     like: post.likes_count || 0,
     sad: post.sads_count || 0,
     angry: post.angries_count || 0,
   });
 
-  // Initialize userReaction state from props
   const [userReaction, setUserReaction] = useState(post.user_reaction || null);
 
   const [comments, setComments] = useState([]);
@@ -51,21 +48,49 @@ const Post = ({ post, currentUser, onDeletePost }) => {
   const isPostAuthor = currentUser && post.user_id === currentUser.id;
   // --- End State ---
 
-  // --- useEffect Hook: Sync local 'reactions' state with prop changes ---
+  // --- useEffect Hook: Sync local 'reactions' state and counts with prop changes ---
   useEffect(() => {
     setReactions({
       like: post.likes_count || 0,
       sad: post.sads_count || 0,
       angry: post.angries_count || 0,
     });
-  }, [post.likes_count, post.sads_count, post.angries_count]);
+    // Also sync counts if post prop changes
+    setCounts({
+        reactions: post.reactions_count || 0,
+        comments: post.comments_count || 0,
+        shares: post.shares_count || 0,
+    });
+    // Sync user reaction
+    setUserReaction(post.user_reaction || null);
+  }, [post.likes_count, post.sads_count, post.angries_count, post.reactions_count, post.comments_count, post.shares_count, post.user_reaction]);
   // --- End useEffect ---
 
-  // --- useEffect Hook: Sync local 'userReaction' state with prop changes ---
+  // --- useEffect Hook: Listen for real-time commentAdded events ---
   useEffect(() => {
-    setUserReaction(post.user_reaction || null);
-  }, [post.user_reaction]);
-  // --- End useEffect ---
+    // Only listen if socket is available, comments are visible, and not loading
+    if (socket && isCommentsVisible && !isLoadingComments) {
+        const handleNewComment = (newCommentData) => {
+            // Check if the comment belongs to this specific post
+            if (newCommentData.post_id === post.id) {
+                console.log("Real-time comment received in Post component:", newCommentData);
+                // Add the new comment to the local comments list
+                setComments(prevComments => [...prevComments, newCommentData]);
+                // Optionally, update the local counts state (though App.jsx already did this)
+                // setCounts(prev => ({ ...prev, comments: prev.comments + 1 }));
+            }
+        };
+
+        // Attach the listener
+        socket.on('commentAdded', handleNewComment);
+
+        // Cleanup listener on unmount or when dependencies change
+        return () => {
+            socket.off('commentAdded', handleNewComment);
+        };
+    }
+  }, [socket, isCommentsVisible, isLoadingComments, post.id]); // Re-run if these change
+  // --- End real-time comment listener ---
 
   // --- Handler Functions ---
   const handleReactionClick = async (type) => {
@@ -76,30 +101,32 @@ const Post = ({ post, currentUser, onDeletePost }) => {
       const response = await toggleReaction(post.id, type);
       console.log("Reaction API Response:", response.data);
 
-      if (response.data.message === 'Reaction removed') {
-        // Update local counts state with data from backend
-        setReactions({
-          like: response.data.counts.likes_count,
-          sad: response.data.counts.sads_count,
-          angry: response.data.counts.angries_count,
-        });
-        // Update local user reaction state
-        setUserReaction(null);
+      // --- Emit event to Node.js server for real-time update ---
+      // Do this *after* the successful API call
+      if (socket) { // Check if socket is available
+        socket.emit('postReactionUpdated', { postId: post.id });
+        console.log(`Emitted 'postReactionUpdated' for post ${post.id}`);
+      }
+      // --- End emit event ---
 
-      } else if (response.data.reaction) {
-        // Update local counts state with data from backend
+      // Update local state based on the API response (as before)
+      if (response.data.message === 'Reaction removed') {
         setReactions({
           like: response.data.counts.likes_count,
           sad: response.data.counts.sads_count,
           angry: response.data.counts.angries_count,
         });
-        // Update local user reaction state
+        setUserReaction(null);
+      } else if (response.data.reaction) {
+        setReactions({
+          like: response.data.counts.likes_count,
+          sad: response.data.counts.sads_count,
+          angry: response.data.counts.angries_count,
+        });
         setUserReaction(type);
       }
-      // Clear any previous error related to reactions
       setError(null);
     } catch (err) {
-      // Handle potential 429 error or other network issues
       if (err.response && err.response.status === 429) {
         setError("Too many requests. Please wait and try again.");
         console.error("Rate limit exceeded for reaction toggle.");
@@ -141,9 +168,22 @@ const Post = ({ post, currentUser, onDeletePost }) => {
     setError(null);
     try {
       const response = await addComment(post.id, newComment);
-      setComments(prev => [...prev, response.data]);
+      // Clear the input field immediately
       setNewComment('');
-      setCounts(prev => ({ ...prev, comments: prev.comments + 1 }));
+
+      // --- Emit event to Node.js server for real-time update ---
+      // Send the postId and the newly created comment data
+      if (socket && response.data) { // Check if socket is available and response has data
+        socket.emit('postCommentAdded', { postId: post.id, comment: response.data });
+        console.log(`Emitted 'postCommentAdded' for post ${post.id}`, response.data);
+      }
+      // --- End emit event ---
+
+      // Note: The local comment list and count are now updated by the
+      // real-time listeners in useEffect and App.jsx, so we don't need to do it here.
+      // setComments(prev => [...prev, response.data]); // Removed
+      // setCounts(prev => ({ ...prev, comments: prev.comments + 1 })); // Removed
+
     } catch (err) {
       console.error("Add comment error:", err);
       setError("Failed to add comment.");
@@ -160,8 +200,6 @@ const Post = ({ post, currentUser, onDeletePost }) => {
       const response = await sharePost(post.id);
       console.log("Share response:", response.data);
       setCounts(prev => ({ ...prev, shares: prev.shares + 1 }));
-      // Optionally, you could add the new shared post to the global feed state
-      // via a prop function from App.jsx if needed.
       alert("Post shared!");
     } catch (err) {
       console.error("Share error:", err);
@@ -181,14 +219,11 @@ const Post = ({ post, currentUser, onDeletePost }) => {
   // --- Render Return ---
   return (
     <article className="post-card">
-      {/* Display error messages */}
       {error && <div className="post-error">{error}</div>}
 
-      {/* Post Header */}
       <header className="post-header">
         <div>
           <strong>{post.user?.name}</strong>
-          {/* Check for shared post using snake_case as per API response */}
           {post.shared_post_id && <span className="shared-indicator"> shared a post</span>}
         </div>
         {isPostAuthor && (
@@ -198,10 +233,8 @@ const Post = ({ post, currentUser, onDeletePost }) => {
         )}
       </header>
 
-      {/* Post Body */}
       <div className="post-body">
         <p>{post.body}</p>
-        {/* Display shared post snippet using snake_case */}
         {post.shared_post && (
           <div className="shared-post-snippet">
             <p><strong>{post.shared_post.user?.name}:</strong> {post.shared_post.body}</p>
@@ -209,7 +242,6 @@ const Post = ({ post, currentUser, onDeletePost }) => {
         )}
       </div>
 
-      {/* Post Stats - Uses the 'reactions' state kept in sync */}
       <div className="post-stats">
         <span>{reactions.like} Likes</span>
         <span>{reactions.sad} Sads</span>
@@ -218,7 +250,6 @@ const Post = ({ post, currentUser, onDeletePost }) => {
         <span>{counts.shares} Shares</span>
       </div>
 
-      {/* Reaction Buttons - Uses 'userReaction' state kept in sync */}
       <div className="post-reactions">
         <ReactionButton
           type="Like"
@@ -246,7 +277,6 @@ const Post = ({ post, currentUser, onDeletePost }) => {
         />
       </div>
 
-      {/* Action Buttons */}
       <div className="post-actions">
         <button
           onClick={toggleComments}
@@ -260,7 +290,6 @@ const Post = ({ post, currentUser, onDeletePost }) => {
         </button>
       </div>
 
-      {/* Comments Section */}
       {isCommentsVisible && (
         <div className="post-comments-section">
           <form onSubmit={handleAddComment} className="add-comment-form">
@@ -292,7 +321,6 @@ const Post = ({ post, currentUser, onDeletePost }) => {
         </div>
       )}
 
-      {/* Action Loading Indicator */}
       {actionLoading && <div className="action-loading">Processing...</div>}
     </article>
   );

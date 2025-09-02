@@ -1,5 +1,6 @@
 // src/App.jsx
 import React, { useState, useEffect } from "react";
+import io from "socket.io-client"; // <-- Import Socket.IO Client
 import apiClient from "./api/apiClient";
 import Header from "./components/layout/Header.jsx";
 import Footer from "./components/layout/Footer.jsx";
@@ -8,11 +9,9 @@ import Register from "./components/auth/Register.jsx";
 import Feed from "./components/feed/Feed.jsx";
 import UserList from "./components/profile/UserList.jsx";
 import ProfileView from "./components/profile/ProfileView.jsx";
-import Chat from "./components/chat/Chat.jsx"; 
+import Chat from "./components/chat/Chat.jsx";
 import { logout } from "./api/authService";
-// --- Import the deletePost function ---
-import { deletePost } from "./api/postService"; // <-- Added Import
-// --- End import ---
+import { deletePost } from "./api/postService";
 import "./App.css";
 
 export default function App() {
@@ -24,19 +23,87 @@ export default function App() {
   const [authView, setAuthView] = useState('login');
   const [currentView, setCurrentView] = useState('feed');
   const [profileUser, setProfileUser] = useState(null);
-  const [chatWithUser, setChatWithUser] = useState(null); 
+  const [chatWithUser, setChatWithUser] = useState(null);
   const [profileData, setProfileData] = useState({
     followers: [],
     following: []
   });
   const [profileLoading, setProfileLoading] = useState(false);
 
+  // --- State for Socket.IO connection ---
+  const [socket, setSocket] = useState(null);
+  // --- End Socket.IO state ---
+
   // Auth check on initial load
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (token) {
       apiClient.get("/user")
-        .then(response => setUser(response.data))
+        .then(response => {
+            setUser(response.data);
+            // --- Establish Socket.IO connection after successful auth ---
+            const newSocket = io("http://localhost:3001", { // Adjust URL to your chat server
+                auth: {
+                    token: token // Pass Sanctum token for authentication
+                }
+            });
+            setSocket(newSocket);
+
+            // --- Listen for real-time events ---
+            newSocket.on("connect", () => {
+                console.log("Connected to Socket.IO server for real-time updates");
+            });
+
+            newSocket.on("reactionUpdated", (data) => {
+                console.log("Real-time reaction update received:", data);
+                // Update the posts state with the new reaction counts and user reaction
+                setPosts(prevPosts =>
+                    prevPosts.map(post => {
+                        if (post.id === data.post_id) {
+                            return {
+                                ...post,
+                                likes_count: data.likes_count,
+                                sads_count: data.sads_count,
+                                angries_count: data.angries_count,
+                                reactions_count: data.reactions_count,
+                                user_reaction: data.user_reaction // Reflects the current user's reaction for this post
+                            };
+                        }
+                        return post;
+                    })
+                );
+            });
+
+            newSocket.on("commentAdded", (newComment) => {
+                console.log("Real-time comment added:", newComment);
+                // Update the comment count for the relevant post
+                setPosts(prevPosts =>
+                    prevPosts.map(post => {
+                        if (post.id === newComment.post_id) {
+                            return {
+                                ...post,
+                                comments_count: (post.comments_count || 0) + 1
+                            };
+                        }
+                        return post;
+                    })
+                );
+                // Note: The actual comment content isn't added to the feed's state here.
+                // The Post component should fetch comments when opened or use its own real-time listener.
+            });
+
+            newSocket.on("connect_error", (err) => {
+                 console.error("Socket.IO Connection Error:", err.message);
+                 setError("Real-time updates unavailable.");
+            });
+
+             newSocket.on("disconnect", (reason) => {
+                 console.log("Disconnected from Socket.IO server:", reason);
+                 // Handle disconnection if needed
+            });
+
+            // --- End real-time event listeners ---
+        })
         .catch(() => {
           localStorage.removeItem("token");
           setError("Session expired. Please login again.");
@@ -45,9 +112,17 @@ export default function App() {
     } else {
       setLoading(false);
     }
-  }, []);
 
-  // Fetch data when authenticated
+    // Cleanup function for useEffect - disconnect socket on unmount
+    return () => {
+        if (socket) {
+            socket.disconnect();
+            console.log("Socket.IO disconnected on App unmount");
+        }
+    };
+  }, []); // Run only once on mount
+
+  // Fetch data when authenticated/view changes
   useEffect(() => {
     if (!user) return;
 
@@ -69,29 +144,36 @@ export default function App() {
     if (currentView === 'feed') {
       fetchData();
     }
-  }, [user, currentView]);
+  }, [user, currentView]); // Depend on user and currentView
 
   const handleAuthSuccess = (token, user) => {
     localStorage.setItem("token", token);
     setUser(user);
     setError(null);
     setAuthView('login');
+    // Socket connection is established by the first useEffect when `user` state changes
   };
 
   const handleLogout = async () => {
     try {
       await logout();
     } finally {
+      // --- Disconnect Socket.IO on logout ---
+      if (socket) {
+          socket.disconnect();
+          setSocket(null);
+          console.log("Socket.IO disconnected on logout");
+      }
+      // --- End Socket.IO disconnect ---
       localStorage.removeItem("token");
       setUser(null);
       setPosts([]);
       setUsersList([]);
       setCurrentView('feed');
-      setChatWithUser(null); // <-- Explicitly reset chatWithUser on logout
-    // Consider resetting profile-related states too if needed
-    setProfileUser(null);
-    setProfileData({ followers: [], following: [] });
-    setProfileLoading(false);
+      setChatWithUser(null);
+      setProfileUser(null);
+      setProfileData({ followers: [], following: [] });
+      setProfileLoading(false);
     }
   };
 
@@ -103,29 +185,17 @@ export default function App() {
       .catch(() => setError("Failed to create post"));
   };
 
-  // --- New Function: Handle Post Deletion ---
   const handleDeletePost = async (postId) => {
-    // Basic confirmation (you might want a better UI confirmation)
     if (!window.confirm("Are you sure you want to delete this post?")) {
       return;
     }
 
     try {
-      // --- Call the API function to delete the post on the backend ---
       await deletePost(postId);
-      // --- End API call ---
-
-      // --- Update state: Remove the deleted post from the main list ---
       setPosts(prevPosts => prevPosts.filter(post => post.id !== postId));
-      // --- End state update ---
     } catch (err) {
       console.error("Error deleting post:", err);
-      // Check for specific error status if needed (e.g., 403 for unauthorized, 404 for not found)
-      // if (err.response && err.response.status === 403) {
-      //   setError("You are not authorized to delete this post.");
-      // } else {
-        setError("Failed to delete post.");
-      // }
+      setError("Failed to delete post.");
     }
   };
 
@@ -133,7 +203,6 @@ export default function App() {
      setChatWithUser(userToChatWith);
      setCurrentView('chat');
   };
-  // --- End New Function ---
 
   const viewProfile = async (userId) => {
     setProfileLoading(true);
@@ -142,7 +211,7 @@ export default function App() {
     try {
       let profileUserData = null;
 
-      if (userId === user.id) {
+      if (userId === user?.id) { // Add optional chaining for safety
         profileUserData = user;
       } else {
         const usersRes = await apiClient.get("/users");
@@ -227,7 +296,7 @@ export default function App() {
         currentView={currentView}
         onGoToFeed={() => setCurrentView('feed')}
         onGoToMyProfile={() => user && viewProfile(user.id)}
-        onGoToChat={() => setCurrentView('chat')} 
+        onGoToChat={() => setCurrentView('chat')}
         onLogout={handleLogout}
       />
 
@@ -237,13 +306,13 @@ export default function App() {
         {user ? (
           currentView === 'feed' ? (
             <>
+              /* Pass the socket instance to Feed */
               <Feed
                 user={user}
                 posts={posts}
                 onCreatePost={handleCreatePost}
-                // --- Pass the new handler function as a prop ---
-                onDeletePost={handleDeletePost} // <-- Added Prop
-                // ---
+                onDeletePost={handleDeletePost}
+                socket={socket} 
               />
               <UserList
                 users={usersList}
@@ -251,7 +320,7 @@ export default function App() {
                 onFollow={handleFollow}
                 onUnfollow={handleUnfollow}
                 onViewProfile={viewProfile}
-               onChat={initiateChat}
+                onChat={initiateChat}
               />
             </>
           ) : currentView === 'profile' ? (
@@ -265,28 +334,25 @@ export default function App() {
               onViewProfile={viewProfile}
               onChat={initiateChat}
             />
-          
-        ) : currentView === 'chat' ? (
-          chatWithUser && chatWithUser.id ? (
-           <Chat
-        sanctumToken={localStorage.getItem("token")} 
-        currentUserId={user.id}
-        otherUserId={chatWithUser?.id} 
-        otherUserName={chatWithUser?.name} 
-      />  ) : (
-      // Render a message or component when there's no user selected for chat
-      <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
-        <h3>You have no recent chats</h3>
-        <p>Select a user to start a conversation.</p>
-        {/* Optionally, provide a link/button back to the user list or feed */}
-        <button onClick={() => setCurrentView('feed')} className="secondary"> {/* Use your button styles */}
-          Back
-        </button>
-      </div>
-    )
-  )
-      : null
-         ) : (authView === 'login' ? (
+          ) : currentView === 'chat' ? (
+            chatWithUser && chatWithUser.id ? (
+              <Chat
+                sanctumToken={localStorage.getItem("token")}
+                currentUserId={user.id}
+                otherUserId={chatWithUser?.id}
+                otherUserName={chatWithUser?.name}
+              />
+            ) : (
+              <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
+                <h3>You have no recent chats</h3>
+                <p>Select a user to start a conversation.</p>
+                <button onClick={() => setCurrentView('feed')} className="secondary">
+                  Back
+                </button>
+              </div>
+            )
+          ) : null
+        ) : (authView === 'login' ? (
             <Login
               onLogin={handleAuthSuccess}
               onSwitchToRegister={() => setAuthView('register')}
