@@ -48,29 +48,25 @@ const Post = ({ post, currentUser, onDeletePost, socket }) => { // <-- Accept so
   const [error, setError] = useState(null);
 
   const isPostAuthor = currentUser && post.user_id === currentUser.id;
-  // --- End State ---
 
-  // --- useEffect Hook: Sync local 'reactions' state and counts with prop changes ---
   useEffect(() => {
     setReactions({
       like: post.likes_count || 0,
       sad: post.sads_count || 0,
       angry: post.angries_count || 0,
     });
-    // Also sync counts if post prop changes
+    
     setCounts({
         reactions: post.reactions_count || 0,
         comments: post.comments_count || 0,
         shares: post.shares_count || 0,
     });
-    // Sync user reaction
-    setUserReaction(post.user_reaction || null);
+   
+    // setUserReaction(post.user_reaction || null);
   }, [post.likes_count, post.sads_count, post.angries_count, post.reactions_count, post.comments_count, post.shares_count, post.user_reaction]);
-  // --- End useEffect ---
-
-  // --- useEffect Hook: Listen for real-time commentAdded events ---
+  
   useEffect(() => {
-    // Only listen if socket is available, comments are visible, and not loading
+    
     if (socket && isCommentsVisible && !isLoadingComments) {
         const handleNewComment = (newCommentData) => {
             // Check if the comment belongs to this specific post

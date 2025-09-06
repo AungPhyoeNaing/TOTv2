@@ -74,7 +74,7 @@ io.on('connection', (socket) => {
                 timeout: 5000
             });
 
-            const currentUserReaction = userReactionRes.data.reaction || null;
+            const currentUserReaction = userReactionRes.data.type || null;
 
             // 2. Get the post details to get the latest counts
             // Note: Fetching all posts might be inefficient for large lists.
