@@ -280,19 +280,22 @@ export default function App() {
 
       setProfileUser(profileUserData || { id: userId, name: 'User' });
 
-      const [followersRes, followingRes] = await Promise.all([
+      const [followersRes, followingRes, postsRes] = await Promise.all([
         apiClient.get(`/followers/${userId}`),
-        apiClient.get(`/following/${userId}`)
+        apiClient.get(`/following/${userId}`),
+        apiClient.get(`/users/${userId}/posts`)
       ]);
 
       const followersData = followersRes.data.data ||
         (Array.isArray(followersRes.data) ? followersRes.data : []);
       const followingData = followingRes.data.data ||
         (Array.isArray(followingRes.data) ? followingRes.data : []);
+      const userPosts = Array.isArray(postsRes.data) ? postsRes.data : [];
 
       setProfileData({
         followers: followersData,
-        following: followingData
+        following: followingData,
+         posts: userPosts
       });
 
     } catch (err) {
@@ -372,6 +375,7 @@ export default function App() {
                 onCreatePost={handleCreatePost}
                 onDeletePost={handleDeletePost}
                 socket={socket} 
+                onViewProfile={viewProfile}
               />
               <UserList
                 users={usersList}
@@ -400,6 +404,7 @@ export default function App() {
                 currentUserId={user.id}
                 otherUserId={chatWithUser?.id}
                 otherUserName={chatWithUser?.name}
+                onViewProfile={viewProfile}
               />
             ) : (
               <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>

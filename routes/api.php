@@ -34,6 +34,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
    
     Route::get('/posts', [PostController::class, 'index']);
+    Route::get('/users/{user}/posts', [PostController::class, 'getUserPosts']);
     Route::post('/posts', [PostController::class, 'store']);
    
     Route::post('/posts/{post}/share', [PostController::class, 'share']); // Add this line

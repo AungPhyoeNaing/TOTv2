@@ -5,7 +5,7 @@ import Post from "./Post.jsx";
 import "./Feed.css";
 
 // Accept the socket prop
-const Feed = ({ user, posts, onCreatePost, onDeletePost, socket }) => { // <-- Accept socket prop
+const Feed = ({ user, posts, onCreatePost, onDeletePost, socket, onViewProfile}) => { // <-- Accept socket prop
   return (
     <section className="feed">
       <header>
@@ -23,6 +23,7 @@ const Feed = ({ user, posts, onCreatePost, onDeletePost, socket }) => { // <-- A
               post={post}
               currentUser={user}
               onDeletePost={onDeletePost}
+              onViewProfile={onViewProfile}
               // Pass the socket instance down to each Post component
               socket={socket} 
             />

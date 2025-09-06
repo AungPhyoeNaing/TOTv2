@@ -1,18 +1,18 @@
 // src/components/chat/Chat.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
-import axios from 'axios'; // <-- Import axios for API calls
+import axios from 'axios';
 import './Chat.css';
 
 const SOCKET_SERVER_URL = 'http://localhost:3001';
-// Define your Laravel API base URL
-const LARAVEL_API_BASE_URL = 'http://localhost:8000/api'; // <-- Add API base URL
+const LARAVEL_API_BASE_URL = 'http://localhost:8000/api';
 
-const Chat = ({ sanctumToken, currentUserId, otherUserId, otherUserName }) => {
+// Accept the onViewProfile prop
+const Chat = ({ sanctumToken, currentUserId, otherUserId, otherUserName, onViewProfile }) => { // <-- Accept onViewProfile
     const [socket, setSocket] = useState(null);
-    const [messages, setMessages] = useState([]); // State for messages
+    const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
-    const [loadingHistory, setLoadingHistory] = useState(false); // <-- State for loading indicator
+    const [loadingHistory, setLoadingHistory] = useState(false);
     const messagesEndRef = useRef(null);
 
     const scrollToBottom = () => {
@@ -23,53 +23,45 @@ const Chat = ({ sanctumToken, currentUserId, otherUserId, otherUserName }) => {
         scrollToBottom();
     }, [messages]);
 
-    // --- New useEffect for fetching message history ---
     useEffect(() => {
         const fetchMessageHistory = async () => {
-            // Reset messages and input when chatting with a different user or initially
             setMessages([]);
             setNewMessage('');
-            setLoadingHistory(true); // Start loading
+            setLoadingHistory(true);
 
-            // Ensure we have the necessary data to fetch history
             if (!sanctumToken || !currentUserId || !otherUserId) {
                 console.error("Chat: Cannot fetch history, missing required props.", { sanctumToken, currentUserId, otherUserId });
-                setLoadingHistory(false); // Stop loading even on error
+                setLoadingHistory(false);
                 return;
             }
 
             try {
                 console.log(`Chat: Fetching message history with user ID ${otherUserId}`);
-                // Make API call to Laravel to get messages between current user and other user
                 const response = await axios.get(`${LARAVEL_API_BASE_URL}/messages/${otherUserId}`, {
                     headers: {
-                        'Authorization': `Bearer ${sanctumToken}`, // Include Sanctum token for auth
+                        'Authorization': `Bearer ${sanctumToken}`,
                     }
                 });
 
                 const historyMessages = response.data || [];
                 console.log("Chat: Fetched message history:", historyMessages);
-                setMessages(historyMessages); // Populate messages state with fetched history
-                scrollToBottom(); // Scroll to the bottom to show latest messages
+                setMessages(historyMessages);
+                scrollToBottom();
             } catch (error) {
                 console.error("Chat: Error fetching message history:", error);
-                console.error("Chat: Error response data:", error.response?.data); // Log error details
+                console.error("Chat: Error response data:", error.response?.data);
                 console.error("Chat: Error response status:", error.response?.status);
-                // TODO: Optionally set an error state to display a message to the user
-                // setError("Failed to load chat history.");
-                 // Set messages to empty array on error to clear potential stale data
                 setMessages([]);
             } finally {
-                setLoadingHistory(false); // Stop loading regardless of success or error
+                setLoadingHistory(false);
             }
         };
 
         fetchMessageHistory();
-    }, [sanctumToken, currentUserId, otherUserId]); // <-- Dependencies: re-run when these change
-    // --- End new useEffect ---
+    }, [sanctumToken, currentUserId, otherUserId]);
 
     useEffect(() => {
-       
+
         if (!sanctumToken || !currentUserId || !otherUserId) {
             console.error("Chat: Missing required props for socket connection (sanctumToken, currentUserId, otherUserId)");
             return;
@@ -91,29 +83,23 @@ const Chat = ({ sanctumToken, currentUserId, otherUserId, otherUserName }) => {
         socketInstance.on('receiveMessage', (message) => {
             console.log("Chat: Received message (real-time or confirmation):", message);
             setMessages(prevMessages => {
-                // --- Improved logic to prevent duplicates and handle optimistic updates ---
-                // Check if the message already exists based on ID or tempId
                 const alreadyExists = prevMessages.some(
                     msg => (msg.id && msg.id === message.id) || (msg.tempId && msg.tempId === message.tempId)
                 );
 
                 if (alreadyExists) {
-                    // If it's an update to an optimistic message (identified by tempId matching a future ID)
                     const existingIndex = prevMessages.findIndex(
                         m => m.tempId && message.id && m.tempId === `temp-${message.id}`
                     );
                     if (existingIndex !== -1) {
                         const updatedMessages = [...prevMessages];
-                        updatedMessages[existingIndex] = message; // Replace temp message with confirmed one
+                        updatedMessages[existingIndex] = message;
                         console.log("Chat: Updated optimistic message with server data");
                         return updatedMessages;
                     }
-                    // If it's a true duplicate (e.g., received via socket after loading history),
-                    // ignore it.
                     console.log("Chat: Ignoring duplicate message");
                     return prevMessages;
                 } else {
-                    // Add genuinely new real-time message
                     console.log("Chat: Added new real-time message");
                     return [...prevMessages, message];
                 }
@@ -130,16 +116,13 @@ const Chat = ({ sanctumToken, currentUserId, otherUserId, otherUserName }) => {
             console.log('Chat: Disconnected from server. Reason:', reason);
         });
 
-        // Cleanup function for socket connection
         return () => {
             console.log('Chat: Cleaning up socket connection');
             if (socketInstance) {
                 socketInstance.disconnect();
             }
-            // Optionally reset socket state here
-            // setSocket(null);
         };
-    }, [sanctumToken, currentUserId, otherUserId]); // Reconnect if these props change
+    }, [sanctumToken, currentUserId, otherUserId]);
 
     const handleSendMessage = () => {
         if (newMessage.trim() && socket) {
@@ -156,22 +139,18 @@ const Chat = ({ sanctumToken, currentUserId, otherUserId, otherUserName }) => {
                 id: undefined,
                 tempId: `temp-${Date.now()}`,
                 created_at: new Date().toISOString(),
-                // sender info might come from props or state if needed immediately
             };
 
-            // Optimistic update: Add temporary message to UI immediately
             setMessages(prevMessages => [...prevMessages, tempMessage]);
             console.log("Chat: Added temporary message to UI");
             scrollToBottom();
-            setNewMessage(''); // Clear input field
+            setNewMessage('');
 
-            // Send message data to the server via Socket.IO
             socket.emit('sendMessage', messageData);
             console.log("Chat: Message emitted to server");
         } else if (!socket) {
              console.warn("Chat: Cannot send message, no socket connection.");
         }
-        // Optionally handle case where newMessage is empty
     };
 
     const handleKeyPress = (e) => {
@@ -181,25 +160,39 @@ const Chat = ({ sanctumToken, currentUserId, otherUserId, otherUserName }) => {
         }
     };
 
+    // Use the provided name or fallback
     const displayName = otherUserName || `User ${otherUserId || 'Unknown'}`;
 
     return (
         <div className="chat-container">
             <div className="chat-header">
-                <h3>Chat with {displayName}</h3>
+                {/* Make the user's name clickable */}
+                <h3>
+                    Chat with
+                    <span
+                        onClick={() => {
+                            // Check if onViewProfile function exists and otherUserId is available
+                            if (onViewProfile && otherUserId) {
+                                onViewProfile(otherUserId); // Call onViewProfile with the other user's ID
+                            }
+                        }}
+                        style={{ cursor: 'pointer', marginLeft: '5px', color: 'blue' }} // Basic styling
+                        // Consider using a dedicated CSS class for better styling
+                    >
+                        {displayName}
+                    </span>
+                </h3>
             </div>
 
             <div className="chat-messages-container">
-                {loadingHistory ? ( // <-- Show loading indicator
+                {loadingHistory ? (
                     <div className="chat-placeholder">Loading messages...</div>
                 ) : messages.length > 0 ? (
                     messages.map((msg) => {
-                        // Determine if the message is from the current user
-                        // Assumes message object has sender_id and potentially a sender object
                         const isCurrentUser = msg.sender_id == currentUserId || (msg.sender && msg.sender.id == currentUserId);
                         return (
                             <div
-                                key={msg.id || msg.tempId} // Use server ID or temp ID for React key
+                                key={msg.id || msg.tempId}
                                 className={`message-bubble ${isCurrentUser ? 'message-outgoing' : 'message-incoming'}`}
                             >
                                 <div>{msg.content}</div>
@@ -210,7 +203,6 @@ const Chat = ({ sanctumToken, currentUserId, otherUserId, otherUserName }) => {
                         );
                     })
                 ) : (
-                    // Show placeholder if no messages and not loading
                     <div className="chat-placeholder">
                         Start the conversation with {displayName}...
                     </div>
@@ -225,11 +217,11 @@ const Chat = ({ sanctumToken, currentUserId, otherUserId, otherUserName }) => {
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyPress={handleKeyPress}
                     placeholder={`Message ${displayName}...`}
-                    disabled={!socket || loadingHistory} // Disable input while loading history
+                    disabled={!socket || loadingHistory}
                 />
                 <button
                     onClick={handleSendMessage}
-                    disabled={!newMessage.trim() || !socket || loadingHistory} // Disable button while loading
+                    disabled={!newMessage.trim() || !socket || loadingHistory}
                 >
                     Send
                 </button>

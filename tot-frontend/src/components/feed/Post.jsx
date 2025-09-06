@@ -24,7 +24,7 @@ const ReactionButton = ({ type, count, isActive, onClick, disabled, ariaLabel })
 // --- End ReactionButton ---
 
 // Accept the socket prop
-const Post = ({ post, currentUser, onDeletePost, socket }) => { // <-- Accept socket prop
+const Post = ({ post, currentUser, onDeletePost, socket, onViewProfile }) => { // <-- Accept socket prop
   // --- State initialization ---
   const [counts, setCounts] = useState({
     reactions: post.reactions_count || 0,
@@ -221,7 +221,14 @@ const Post = ({ post, currentUser, onDeletePost, socket }) => { // <-- Accept so
 
       <header className="post-header">
         <div>
-          <strong>{post.user?.name}</strong>
+          <strong
+          onClick={() => {
+              if (onViewProfile) {
+                onViewProfile(post.user_id); // Call onViewProfile with the author's ID
+              }
+            }}
+            style={{ cursor: 'pointer', color: 'blue' }} 
+          >{post.user?.name}</strong>
           {post.shared_post_id && <span className="shared-indicator"> shared a post</span>}
         </div>
         {isPostAuthor && (

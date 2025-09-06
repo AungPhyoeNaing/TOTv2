@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Post;
 use Illuminate\Support\Facades\Auth; // Import Auth facade
-
+use App\Models\User;
 class PostController extends Controller
 {
     /**
@@ -65,6 +65,34 @@ class PostController extends Controller
 
         return response()->json($posts);
     }
+
+
+    public function getUserPosts(User $user)
+{
+    $posts = Post::where('user_id', $user->id)
+        ->with('user', 'sharedPost.user') // Eager load relationships
+        ->orderBy('created_at', 'desc')
+        ->get()
+        ->map(function ($post) {
+            // Attach reaction counts (assuming you have these columns or accessors)
+            $post->likes_count = $post->reactions->where('type', 'like')->count();
+            $post->sads_count = $post->reactions->where('type', 'sad')->count();
+            $post->angries_count = $post->reactions->where('type', 'angry')->count();
+            $post->reactions_count = $post->reactions->count();
+            $post->comments_count = $post->comments->count();
+            $post->shares_count = $post->shares->count();
+
+            // Optional: Attach current user's reaction (if authenticated)
+            if (auth()->check()) {
+                $userReaction = $post->reactions->firstWhere('user_id', auth()->id());
+                $post->user_reaction = $userReaction ? $userReaction->type : null;
+            }
+
+            return $post;
+        });
+
+    return response()->json($posts);
+}
 
     /**
      * Store a newly created resource in storage.
