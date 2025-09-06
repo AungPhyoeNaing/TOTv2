@@ -32,6 +32,8 @@ Route::middleware('auth:sanctum')->group(function () {
         return $request->user();
     });
 
+    Route::get('/users/{user}/is-mutual-follow/{otherUser}', [AuthController::class, 'isMutualFollow']);
+
    
     Route::get('/posts', [PostController::class, 'index']);
     Route::get('/users/{user}/posts', [PostController::class, 'getUserPosts']);

@@ -30,7 +30,7 @@ export default function ProfileView({
   // Determine if the current user is following the profile user
   // Use optional chaining and nullish coalescing for safety
   const isFollowing = profileUser.is_following ?? false;
-
+  const isMutualFollow = profileData?.isMutualFollow ?? false; 
   // Handler for follow/unfollow button click
   const handleFollowAction = () => {
     if (isFollowing) {
@@ -79,12 +79,14 @@ export default function ProfileView({
 
               {/* Message Button */}
               {/* Added onClick handler to initiate chat with this user */}
-              <button
-                className="message-button" // You can style this class in your CSS
-                onClick={() => onChat(profileUser)} // Pass the entire profileUser object
-              >
-                Message
-              </button>
+              {isMutualFollow && onChat && (
+                <button
+                  className="message-button" // You can style this class in your CSS
+                  onClick={() => onChat(profileUser)} // Pass the entire profileUser object
+                >
+                  Message
+                </button>
+              )}
             </div>
           )}
         </div>

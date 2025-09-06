@@ -263,49 +263,72 @@ export default function App() {
   };
 
   const viewProfile = async (userId) => {
-    setProfileLoading(true);
-    setCurrentView('profile');
+  setProfileLoading(true);
+  setCurrentView('profile');
 
-    try {
-      let profileUserData = null;
+  try {
+    let profileUserData = null;
 
-      if (userId === user?.id) { // Add optional chaining for safety
-        profileUserData = user;
-      } else {
-        const usersRes = await apiClient.get("/users");
-        profileUserData = Array.isArray(usersRes.data)
-          ? usersRes.data.find(u => u.id === userId)
-          : null;
-      }
-
-      setProfileUser(profileUserData || { id: userId, name: 'User' });
-
-      const [followersRes, followingRes, postsRes] = await Promise.all([
-        apiClient.get(`/followers/${userId}`),
-        apiClient.get(`/following/${userId}`),
-        apiClient.get(`/users/${userId}/posts`)
-      ]);
-
-      const followersData = followersRes.data.data ||
-        (Array.isArray(followersRes.data) ? followersRes.data : []);
-      const followingData = followingRes.data.data ||
-        (Array.isArray(followingRes.data) ? followingRes.data : []);
-      const userPosts = Array.isArray(postsRes.data) ? postsRes.data : [];
-
-      setProfileData({
-        followers: followersData,
-        following: followingData,
-         posts: userPosts
-      });
-
-    } catch (err) {
-      setError("Failed to load profile");
-      console.error("Profile error:", err);
-      setProfileUser({ id: userId, name: 'User' });
-    } finally {
-      setProfileLoading(false);
+    if (userId === user?.id) {
+      profileUserData = user;
+    } else {
+      // Fetch user list to find the profile user (or use a dedicated endpoint if available)
+      const usersRes = await apiClient.get("/users");
+      profileUserData = Array.isArray(usersRes.data)
+        ? usersRes.data.find(u => u.id === userId)
+        : null;
     }
-  };
+
+    setProfileUser(profileUserData || { id: userId, name: 'User' });
+
+    // --- FETCH FOLLOWERS, FOLLOWING, POSTS ---
+    const [followersRes, followingRes, postsRes] = await Promise.all([
+      apiClient.get(`/followers/${userId}`),
+      apiClient.get(`/following/${userId}`),
+      apiClient.get(`/users/${userId}/posts`)
+    ]);
+
+    const followersData = followersRes.data.data ||
+      (Array.isArray(followersRes.data) ? followersRes.data : []);
+    const followingData = followingRes.data.data ||
+      (Array.isArray(followingRes.data) ? followingRes.data : []);
+    const userPosts = Array.isArray(postsRes.data) ? postsRes.data : [];
+
+    // --- FETCH MUTUAL FOLLOW STATUS SEPARATELY ---
+    let isMutualFollow = false; // Default value
+    if (userId !== user?.id) { // Only check if not viewing own profile
+        try {
+            // Call the mutual follow endpoint
+            const mutualFollowResponse = await apiClient.get(`/users/${userId}/is-mutual-follow/${user.id}`);
+            // Extract the status, defaulting to false if not present
+            isMutualFollow = mutualFollowResponse.data?.is_mutual_follow ?? false;
+        } catch (followCheckError) {
+            // Handle potential errors (e.g., network issues, 403 from backend if user tries self-check)
+            console.error("Error checking mutual follow status:", followCheckError);
+            // isMutualFollow remains false
+        }
+    }
+    // If viewing own profile, isMutualFollow should logically be false or irrelevant, default is fine.
+
+    // --- UPDATE STATE ---
+    setProfileData({
+      followers: followersData,
+      following: followingData,
+      posts: userPosts,
+      // ADD the mutual follow status to profileData
+      isMutualFollow: isMutualFollow
+    });
+
+  } catch (err) {
+    setError("Failed to load profile");
+    console.error("Profile error:", err);
+    setProfileUser({ id: userId, name: 'User' });
+    // Ensure profileData has isMutualFollow even on error
+    setProfileData(prevData => ({ ...prevData, isMutualFollow: false }));
+  } finally {
+    setProfileLoading(false);
+  }
+};
 
   const handleFollow = async (userId) => {
     try {

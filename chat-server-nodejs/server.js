@@ -151,46 +151,95 @@ io.on('connection', (socket) => {
 
 
     socket.on('sendMessage', async (messageData) => {
-        console.log('[Message] Received message ', messageData);
+    console.log('[Message] Received message ', messageData);
 
-        try {
-            // Validate sender
-            if (messageData.sender_id != socket.userId) {
-               console.error("[Message] Sender ID mismatch");
-               return socket.emit('messageError', { error: 'Unauthorized sender' });
-            }
+    try {
+        // Validate sender
+        if (messageData.sender_id != socket.userId) {
+           console.error("[Message] Sender ID mismatch");
+           return socket.emit('messageError', { error: 'Unauthorized sender' });
+        }
 
-            // 1. Save message to Laravel database via API
-            const response = await axios.post('http://localhost:8000/api/messages', messageData, {
+        // --- NEW: Check Mutual Follow Status BEFORE saving ---
+        const senderId = messageData.sender_id;
+        const recipientId = messageData.recipient_id;
+
+        // Call Laravel API to check mutual follow
+        // You need to create this endpoint in Laravel
+        const followCheckResponse = await axios.get(
+            `http://localhost:8000/api/users/${senderId}/is-mutual-follow/${recipientId}`,
+            {
                 headers: {
                     'Authorization': `Bearer ${socket.handshake.auth.token}`,
                 },
                 timeout: 5000
-            });
-
-            const savedMessage = response.data;
-            console.log("[Message] Message saved to DB:", savedMessage);
-
-            // 2. Broadcast message to the relevant room/users
-            const userIds = [savedMessage.sender_id, savedMessage.recipient_id].sort();
-            const roomName = `chat_${userIds[0]}_${userIds[1]}`;
-
-            const recipientSocketId = connectedUsers[savedMessage.recipient_id];
-            if (recipientSocketId) {
-                io.to(recipientSocketId).emit('receiveMessage', savedMessage);
-                console.log(`[Message] Message sent to recipient ${savedMessage.recipient_id}`);
-            } else {
-                 console.log(`[Message] Recipient ${savedMessage.recipient_id} is offline`);
             }
+        );
 
-            // Also send confirmation back to sender
-            socket.emit('messageSent', savedMessage);
+        // Assuming the Laravel endpoint returns { is_mutual_follow: true/false }
+        const isMutualFollow = followCheckResponse.data.is_mutual_follow;
 
-        } catch (error) {
+        if (!isMutualFollow) {
+            console.log(`[Message] Message blocked. Users ${senderId} and ${recipientId} are not mutual followers.`);
+            // Emit error back to the sender
+            return socket.emit('messageError', { error: 'You can only message users you mutually follow.' });
+            // Stop further processing
+            // return; // Technically redundant after return above, but shows intent
+        }
+        // --- END NEW CHECK ---
+
+        // 1. Save message to Laravel database via API (only if mutual follow check passes)
+        const response = await axios.post('http://localhost:8000/api/messages', messageData, {
+            headers: {
+                'Authorization': `Bearer ${socket.handshake.auth.token}`,
+            },
+            timeout: 5000
+        });
+
+        const savedMessage = response.data;
+        console.log("[Message] Message saved to DB:", savedMessage);
+
+        // 2. Broadcast message to the relevant room/users
+        const userIds = [savedMessage.sender_id, savedMessage.recipient_id].sort();
+        const roomName = `chat_${userIds[0]}_${userIds[1]}`;
+
+        // Optional: Broadcast to the room instead of just the recipient socket
+        // io.to(roomName).emit('receiveMessage', savedMessage);
+
+        // Send to specific recipient if online
+        const recipientSocketId = connectedUsers[savedMessage.recipient_id];
+        if (recipientSocketId) {
+            // Emit directly to recipient's socket
+            io.to(recipientSocketId).emit('receiveMessage', savedMessage);
+            console.log(`[Message] Message sent to recipient ${savedMessage.recipient_id}`);
+        } else {
+             console.log(`[Message] Recipient ${savedMessage.recipient_id} is offline`);
+        }
+
+        // Also send confirmation back to sender
+        socket.emit('messageSent', savedMessage);
+
+    } catch (error) {
+        // Differentiate between follow check error and other errors if needed
+        // The follow check endpoint should ideally return a specific status code or message
+        if (error.response && error.response.status === 403) {
+             // Assume 403 is from our mutual follow check endpoint
+             console.log("[Message] Mutual follow check failed:", error.response?.data?.error || error.message);
+             // The error message might already be sent by the endpoint, but ensure one is sent
+             // socket.emit('messageError', { error: error.response?.data?.error || 'Messaging restricted.' });
+             // If the Laravel endpoint emits the messageError, you might not need this line here.
+             // However, if it just returns data, you need to emit the error from Node.
+             // Let's assume the Laravel endpoint just returns data { is_mutual_follow: false }
+             // Then the check `if (!isMutualFollow)` above handles emitting the error.
+             // If the Laravel endpoint itself sends a 403 response with an error message,
+             // this block will catch it.
+             socket.emit('messageError', { error: error.response?.data?.error || 'Messaging restricted by follow rules.' });
+        } else {
             console.error("[Message] Error processing message:", error.response?.data || error.message);
             socket.emit('messageError', { error: 'Failed to send message' });
         }
-    });
+    }
+});
 
     socket.on('disconnect', () => {
         console.log(`[Disconnection] User disconnected: ${socket.userId}`);
