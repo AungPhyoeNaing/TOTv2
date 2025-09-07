@@ -616,6 +616,25 @@
     gap: 0.5rem;
   }
 
+
+ .post-media {
+  margin: 16px 0;
+  text-align: center;
+}
+
+.post-media img,
+.post-media video {
+  max-width: 100%;
+  max-height: 500px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.post-media audio {
+  width: 100%;
+  margin-top: 8px;
+}
+
   .reaction-button,
   .post-actions button {
     padding: 0.5rem 1rem;

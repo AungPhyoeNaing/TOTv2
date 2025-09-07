@@ -41,6 +41,9 @@ Route::middleware('auth:sanctum')->group(function () {
    
     Route::post('/posts/{post}/share', [PostController::class, 'share']); // Add this line
     Route::delete('/posts/{post}', [PostController::class, 'destroy']);
+
+
+    Route::post('/media/upload', [App\Http\Controllers\API\MediaController::class, 'upload']);
     
     Route::post('/follow/{user}', [App\Http\Controllers\API\FollowController::class, 'follow']);
     Route::post('/unfollow/{user}', [App\Http\Controllers\API\FollowController::class, 'unfollow']);

@@ -17,7 +17,7 @@ return new class extends Migration
              $table->foreignId('shared_post_id')->nullable()->constrained('posts')->onDelete('set null');
             // Optional: Index for performance if querying shared posts frequently
             $table->index('shared_post_id');
-            $table->text('body');
+            $table->text('body')->nullable();
             
             $table->timestamps();
         });

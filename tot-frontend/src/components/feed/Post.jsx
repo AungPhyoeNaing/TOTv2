@@ -240,6 +240,45 @@ const Post = ({ post, currentUser, onDeletePost, socket, onViewProfile }) => { /
 
       <div className="post-body">
         <p>{post.body}</p>
+        {post.media_url && (
+  <div className="post-media" style={{ marginTop: '12px', marginBottom: '12px' }}>
+    {post.media_type === 'image' && (
+      <img
+        src={post.media_url}
+        alt="Post media"
+        style={{
+          maxWidth: '100%',
+          maxHeight: '400px',
+          borderRadius: '8px',
+          objectFit: 'contain',
+        }}
+      />
+    )}
+
+    {post.media_type === 'video' && (
+      <video
+        controls
+        src={post.media_url}
+        style={{
+          maxWidth: '100%',
+          maxHeight: '400px',
+          borderRadius: '8px',
+        }}
+        preload="metadata"
+      >
+        Your browser does not support the video tag.
+      </video>
+    )}
+
+    {post.media_type === 'audio' && (
+      <div style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
+        <audio controls src={post.media_url} style={{ width: '100%' }}>
+          Your browser does not support the audio tag.
+        </audio>
+      </div>
+    )}
+  </div>
+)}
         {post.shared_post && (
           <div className="shared-post-snippet">
             <p><strong>{post.shared_post.user?.name}:</strong> {post.shared_post.body}</p>

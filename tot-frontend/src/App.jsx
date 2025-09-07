@@ -235,14 +235,15 @@ export default function App() {
     }
   };
 
-  const handleCreatePost = (body) => {
-    apiClient.post("/posts", { body })
-      .then(response => {
-        setPosts(prev => [response.data, ...prev]);
-      })
-      .catch(() => setError("Failed to create post"));
-  };
-
+  const handleCreatePost = async (postData) => {
+  try {
+    const response = await apiClient.post("/posts", postData);
+    setPosts(prev => [response.data, ...prev]);
+  } catch (err) {
+    console.error("Create post error:", err);
+    setError("Failed to create post");
+  }
+};
   const handleDeletePost = async (postId) => {
     if (!window.confirm("Are you sure you want to delete this post?")) {
       return;

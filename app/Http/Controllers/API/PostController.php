@@ -5,8 +5,9 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Post;
-use Illuminate\Support\Facades\Auth; // Import Auth facade
+use Illuminate\Support\Facades\Auth;
 use App\Models\User;
+
 class PostController extends Controller
 {
     /**
@@ -14,7 +15,7 @@ class PostController extends Controller
      * Modified to include counts for reactions, comments, and shares,
      * and data for shared posts.
      */
-     public function index()
+    public function index()
     {
         $userId = Auth::id();
 
@@ -22,18 +23,13 @@ class PostController extends Controller
                 'user:id,name,email,avatar',
                 'sharedPost.user:id,name,email,avatar'
             ])
-            // Keep the total counts
             ->withCount(['reactions', 'comments', 'shares'])
             ->latest();
 
         $posts = $postsQuery->get();
 
         // --- Add specific reaction type counts for each post ---
-        // Use loadMissing to efficiently calculate counts if not already loaded
-        // This avoids N+1 query issues.
         $posts->each(function ($post) {
-            // Add specific counts as dynamic attributes
-            // These will be serialized to JSON (e.g., likes_count, sads_count)
             $post->likes_count = $post->reactions->where('type', 'like')->count();
             $post->sads_count = $post->reactions->where('type', 'sad')->count();
             $post->angries_count = $post->reactions->where('type', 'angry')->count();
@@ -44,19 +40,14 @@ class PostController extends Controller
         if ($userId) {
             $postIds = $posts->pluck('id')->toArray();
 
-            // Fetch user reactions for these posts
             $userReactions = \App\Models\Reaction::where('user_id', $userId)
                                                 ->whereIn('post_id', $postIds)
                                                 ->pluck('type', 'post_id');
 
-            // Append user's reaction type to each post
             $posts->each(function ($post) use ($userReactions) {
-                // Add dynamic attribute 'user_reaction'
-                // Laravel typically converts snake_case to camelCase in JSON
-                $post->user_reaction = $userReactions->get($post->id); // Get type or null
+                $post->user_reaction = $userReactions->get($post->id);
             });
         } else {
-            // Explicitly set user_reaction to null if not logged in
             $posts->each(function ($post) {
                 $post->user_reaction = null;
             });
@@ -66,70 +57,88 @@ class PostController extends Controller
         return response()->json($posts);
     }
 
-
+    /**
+     * Get posts for a specific user.
+     */
     public function getUserPosts(User $user)
-{
-    $posts = Post::where('user_id', $user->id)
-        ->with('user', 'sharedPost.user') // Eager load relationships
-        ->orderBy('created_at', 'desc')
-        ->get()
-        ->map(function ($post) {
-            // Attach reaction counts (assuming you have these columns or accessors)
-            $post->likes_count = $post->reactions->where('type', 'like')->count();
-            $post->sads_count = $post->reactions->where('type', 'sad')->count();
-            $post->angries_count = $post->reactions->where('type', 'angry')->count();
-            $post->reactions_count = $post->reactions->count();
-            $post->comments_count = $post->comments->count();
-            $post->shares_count = $post->shares->count();
+    {
+        $posts = Post::where('user_id', $user->id)
+            ->with('user', 'sharedPost.user')
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($post) {
+                // Attach reaction counts
+                $post->likes_count = $post->reactions->where('type', 'like')->count();
+                $post->sads_count = $post->reactions->where('type', 'sad')->count();
+                $post->angries_count = $post->reactions->where('type', 'angry')->count();
+                $post->reactions_count = $post->reactions->count();
+                $post->comments_count = $post->comments->count();
+                $post->shares_count = $post->shares->count();
 
-            // Optional: Attach current user's reaction (if authenticated)
-            if (auth()->check()) {
-                $userReaction = $post->reactions->firstWhere('user_id', auth()->id());
-                $post->user_reaction = $userReaction ? $userReaction->type : null;
-            }
+                // Attach current user's reaction (if authenticated)
+                if (auth()->check()) {
+                    $userReaction = $post->reactions->firstWhere('user_id', auth()->id());
+                    $post->user_reaction = $userReaction ? $userReaction->type : null;
+                }
 
-            return $post;
-        });
+                // ✅ media_url and media_type are DB columns → auto-included in JSON
+                return $post;
+            });
 
-    return response()->json($posts);
-}
+        return response()->json($posts);
+    }
 
     /**
      * Store a newly created resource in storage.
-     * This method remains unchanged from your original working code,
-     * just formatted slightly.
+     * Supports optional media_url and media_type.
+     * Requires at least body or media.
      */
     public function store(Request $request)
     {
-        // Keep original validation
-        $request->validate([
-            'body' => 'required|string|max:1000'
+        $validated = $request->validate([
+            'body' => 'nullable|string|max:1000',
+            'media_url' => 'nullable|url|max:500',
+            'media_type' => 'nullable|in:image,audio,video',
         ]);
 
-        // Keep original post creation logic
+        // Ensure at least body or media is provided
+        if (empty($validated['body']) && empty($validated['media_url'])) {
+            return response()->json([
+                'message' => 'Post must have either body text or media.'
+            ], 422);
+        }
+
         $post = $request->user()->posts()->create([
-            'body' => $request->body
+            'body' => $validated['body'] ?? null,
+            'media_url' => $validated['media_url'] ?? null,
+            'media_type' => $validated['media_type'] ?? null,
         ]);
 
-        // Keep original response, ensuring 'user' relationship is loaded
-        return response()->json($post->load('user'), 201);
+        // Load user for consistent response
+        $post->load('user');
+
+        // Initialize counts for immediate UI consistency (like in index)
+        $post->likes_count = 0;
+        $post->sads_count = 0;
+        $post->angries_count = 0;
+        $post->reactions_count = 0;
+        $post->comments_count = 0;
+        $post->shares_count = 0;
+        $post->user_reaction = null;
+
+        return response()->json($post, 201);
     }
 
     /**
      * Remove the specified resource from storage.
-     * New method for deleting a post.
      */
-    public function destroy(Post $post) // Uses route model binding for the {post} parameter
+    public function destroy(Post $post)
     {
-        // Authorization: Check if the authenticated user is the owner of the post
         if ($post->user_id !== Auth::id()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        // If authorized, delete the post
         $post->delete();
-
-        // Return a success response (204 No Content is standard for successful deletion)
         return response()->json(null, 204);
     }
 
@@ -137,61 +146,27 @@ class PostController extends Controller
      * Share a post.
      * Creates a new post referencing the original.
      */
-    public function share(Post $post) // Uses route model binding for the {post} parameter
+    public function share(Post $post)
     {
-        // Create a new post for the authenticated user
         $sharedPostEntry = Auth::user()->posts()->create([
-            'body' => '', // You can set a default message or let the frontend handle it
-            'shared_post_id' => $post->id, // Reference the original post
+            'body' => '',
+            'shared_post_id' => $post->id,
         ]);
 
-        // Load the user relationship for the new post entry
-        // and the shared post's data (including its user)
-        // Using the same eager loading structure as index for consistency
         $sharedPostEntry->load([
             'user:id,name,email,avatar',
             'sharedPost.user:id,name,email,avatar'
         ]);
 
+        // Initialize counts for shared post entry
+        $sharedPostEntry->likes_count = 0;
+        $sharedPostEntry->sads_count = 0;
+        $sharedPostEntry->angries_count = 0;
+        $sharedPostEntry->reactions_count = 0;
+        $sharedPostEntry->comments_count = 0;
+        $sharedPostEntry->shares_count = 0;
+        $sharedPostEntry->user_reaction = null;
+
         return response()->json($sharedPostEntry, 201);
     }
-
-    // If you have show, update methods, they can remain unchanged
-    // unless you also want counts there or other modifications.
-
-    /*
-    public function show(Post $post)
-    {
-        // Example if you want counts and shared post data on the individual post view:
-        $post->load([
-                'user:id,name,email,avatar',
-                'sharedPost.user:id,name,email,avatar'
-            ])
-            ->loadCount(['reactions', 'comments', 'shares']);
-
-        return response()->json($post);
-    }
-    */
-
-    /*
-    // Example update (if exists) - keep original logic
-    public function update(Request $request, Post $post)
-    {
-        if ($post->user_id !== Auth::id()) {
-             return response()->json(['message' => 'Unauthorized'], 403);
-        }
-
-        $request->validate([
-            'body' => 'sometimes|string|max:1000'
-        ]);
-
-        $post->update($request->only('body'));
-        // Reload relationships if necessary
-        $post->load([
-            'user:id,name,email,avatar',
-            'sharedPost.user:id,name,email,avatar'
-        ]);
-        return response()->json($post);
-    }
-    */
 }

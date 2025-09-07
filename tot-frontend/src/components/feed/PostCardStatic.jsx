@@ -1,7 +1,5 @@
-// src/components/feed/PostCardStatic.jsx
 import React from "react";
 import "./Post.css"; // 👈 Reuse existing Post styling
-
 
 const PostCardStatic = ({ post }) => {
   const likes = post.likes_count || 0;
@@ -13,6 +11,48 @@ const PostCardStatic = ({ post }) => {
   // Get first letter of username for avatar
   const userInitial = post.user?.name?.charAt(0).toUpperCase() || '?';
   const isShared = !!post.shared_post_id;
+
+  // ✅ NEW: Media rendering function (copied from Post.jsx)
+  const renderMedia = () => {
+    if (!post.media_url) return null;
+
+    switch (post.media_type) {
+      case "image":
+        return (
+          <div className="post-media">
+            <img
+              src={post.media_url}
+              alt="Post media"
+              className="media-preview"
+            />
+          </div>
+        );
+      case "video":
+        return (
+          <div className="post-media">
+            <video
+              controls
+              src={post.media_url}
+              className="media-preview"
+              preload="metadata"
+            >
+              Your browser does not support the video tag.
+            </video>
+          </div>
+        );
+      case "audio":
+        return (
+          <div className="post-media">
+            <audio controls src={post.media_url} className="audio-player">
+              Your browser does not support the audio tag.
+            </audio>
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+  // ✅ END NEW
 
   return (
     <article className="post-card">
@@ -40,6 +80,11 @@ const PostCardStatic = ({ post }) => {
       {/* Body */}
       <div className="post-body">
         <p>{post.body}</p>
+
+        {/* ✅ INSERT MEDIA RENDERING HERE */}
+        {renderMedia()}
+        {/* ✅ END MEDIA RENDERING */}
+
         {post.shared_post && (
           <div className="shared-post-snippet">
             <p>
@@ -67,11 +112,6 @@ const PostCardStatic = ({ post }) => {
           <span className="stat-number">{shares}</span> Shares
         </span>
       </div>
-
-      {/* Optional: Add a subtle "View in Feed" hint (disabled for now) */}
-      {/* <div style={{ textAlign: 'center', marginTop: '8px', fontSize: '0.8em', color: 'var(--text-muted)' }}>
-        Tap post to view in feed
-      </div> */}
     </article>
   );
 };
