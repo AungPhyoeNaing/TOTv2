@@ -1,7 +1,7 @@
 <?php
 
 namespace App\Http\Controllers\API;
-
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Hash;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -29,6 +29,15 @@ class AuthController extends Controller
         ]);
 
         $token = $user->createToken('api-token')->plainTextToken;
+
+        Http::post('http://localhost:3001/api/notify-login', [
+        'user' => [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'is_following' => false, // default, since they're new to other users' lists
+        ]
+    ]);
 
         return response()->json([
             'user' => $user,

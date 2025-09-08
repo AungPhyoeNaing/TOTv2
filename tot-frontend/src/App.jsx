@@ -107,6 +107,19 @@ export default function App() {
           );
         };
 
+        // --- NEW: Handle user joined event ---
+const handleUserJoined = (newUser) => {
+  console.log("[Socket] New user joined:", newUser);
+  // Add to usersList if not already present
+  setUsersList(prev => {
+    // Avoid duplicates
+    if (prev.some(u => u.id === newUser.id)) return prev;
+    return [...prev, newUser];
+  });
+};
+// --- END NEW ---
+
+
         const handleConnectError = (err) => {
           console.error("[Socket] Connection Error:", err.message);
           if (isMounted) {
@@ -122,6 +135,8 @@ export default function App() {
         newSocketInstance.on("connect", handleConnect);
         newSocketInstance.on("reactionUpdated", handleReactionUpdated);
         newSocketInstance.on("commentAdded", handleCommentAdded);
+
+        newSocketInstance.on("userJoined", handleUserJoined);
         newSocketInstance.on("connect_error", handleConnectError);
         newSocketInstance.on("disconnect", handleDisconnect);
 
@@ -163,6 +178,8 @@ export default function App() {
         newSocketInstance.off("connect", handleConnect);
         newSocketInstance.off("reactionUpdated", handleReactionUpdated);
         newSocketInstance.off("commentAdded", handleCommentAdded);
+
+        newSocketInstance.off("userJoined", handleUserJoined);
         newSocketInstance.off("connect_error", handleConnectError);
         newSocketInstance.off("disconnect", handleDisconnect);
 
@@ -210,6 +227,7 @@ export default function App() {
     setError(null);
     setAuthView('login');
     // Socket connection is established by the first useEffect when `user` state changes
+    window.location.reload();
   };
 
   const handleLogout = async () => {

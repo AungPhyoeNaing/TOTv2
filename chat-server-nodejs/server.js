@@ -246,7 +246,26 @@ io.on('connection', (socket) => {
         delete connectedUsers[socket.userId];
     });
 });
+app.use(express.json()); // Make sure you have this middleware
 
+app.post('/api/notify-login', (req, res) => {
+    const apiKey = req.headers['x-api-key'];
+    if (apiKey !== process.env.NODE_SERVER_KEY) {
+        return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const { user } = req.body;
+
+    if (!user || !user.id) {
+        return res.status(400).json({ error: 'Invalid user data' });
+    }
+
+    // ✅ BROADCAST TO ALL CONNECTED CLIENTS
+    io.emit('userJoined', user);
+    console.log(`[User Presence] Broadcasted userJoined for:`, user.name);
+
+    res.json({ success: true });
+});
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
     console.log(`[Server] Server (Chat + Real-time Updates) running on port ${PORT}`);
