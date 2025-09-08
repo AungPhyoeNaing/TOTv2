@@ -91,27 +91,5 @@ class ReactionController extends Controller
         }
     }
 
-    // You can add index() here if you need to fetch reactions separately,
-    // but counts are often sufficient for display.
-    /*
-    public function index(Post $post): JsonResponse
-    {
-        $reactions = $post->reactions()->with('user:id,name')->get();
-        return response()->json($reactions);
-    }
-    */
-
-    // destroy() method is less needed with toggle, but could be implemented
-    // if you pass the specific reaction ID.
-    /*
-    public function destroy(Reaction $reaction): JsonResponse
-    {
-        // Authorization check
-        if ($reaction->user_id !== Auth::id()) {
-            return response()->json(['message' => 'Unauthorized'], 403);
-        }
-        $reaction->delete();
-        return response()->json(null, 204);
-    }
-    */
+   
 }

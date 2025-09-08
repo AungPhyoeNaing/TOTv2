@@ -69,28 +69,25 @@ const Post = ({ post, currentUser, onDeletePost, socket, onViewProfile }) => { /
     
     if (socket && isCommentsVisible && !isLoadingComments) {
         const handleNewComment = (newCommentData) => {
-            // Check if the comment belongs to this specific post
+           
             if (newCommentData.post_id === post.id) {
                 console.log("Real-time comment received in Post component:", newCommentData);
-                // Add the new comment to the local comments list
+             
                 setComments(prevComments => [...prevComments, newCommentData]);
-                // Optionally, update the local counts state (though App.jsx already did this)
-                // setCounts(prev => ({ ...prev, comments: prev.comments + 1 }));
+                
             }
         };
 
         // Attach the listener
         socket.on('commentAdded', handleNewComment);
 
-        // Cleanup listener on unmount or when dependencies change
+       
         return () => {
             socket.off('commentAdded', handleNewComment);
         };
     }
-  }, [socket, isCommentsVisible, isLoadingComments, post.id]); // Re-run if these change
-  // --- End real-time comment listener ---
-
-  // --- Handler Functions ---
+  }, [socket, isCommentsVisible, isLoadingComments, post.id]); 
+ 
   const handleReactionClick = async (type) => {
     if (actionLoading) return;
     setActionLoading(true);

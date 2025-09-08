@@ -56,8 +56,7 @@ io.on('connection', (socket) => {
         console.log(`[Chat] User ${socket.userId} joined room ${roomName}`);
     });
 
-    // --- Event Listener: Listen for reaction updates from client ---
-    // Client emits this after successfully calling POST /api/posts/{post}/reactions/toggle
+    
     socket.on('postReactionUpdated', async (data) => {
         console.log(`[Reaction] Update notification for post ${data.postId} from user ${socket.userId}:`, data);
 
@@ -115,10 +114,7 @@ io.on('connection', (socket) => {
             console.error(`[Reaction] Error fetching updated data for post ${data.postId}:`, error.response?.data || error.message);
         }
     });
-    // --- End Event Listener ---
-
-    // --- Event Listener: Listen for new comments from client ---
-    // Client emits this after successfully calling POST /api/posts/{post}/comments
+  
     socket.on('postCommentAdded', async (data) => {
         console.log(`[Comment] Added notification for post ${data.postId} from user ${socket.userId}:`, data);
 
@@ -183,8 +179,7 @@ io.on('connection', (socket) => {
             console.log(`[Message] Message blocked. Users ${senderId} and ${recipientId} are not mutual followers.`);
             // Emit error back to the sender
             return socket.emit('messageError', { error: 'You can only message users you mutually follow.' });
-            // Stop further processing
-            // return; // Technically redundant after return above, but shows intent
+         
         }
         // --- END NEW CHECK ---
 
@@ -203,10 +198,6 @@ io.on('connection', (socket) => {
         const userIds = [savedMessage.sender_id, savedMessage.recipient_id].sort();
         const roomName = `chat_${userIds[0]}_${userIds[1]}`;
 
-        // Optional: Broadcast to the room instead of just the recipient socket
-        // io.to(roomName).emit('receiveMessage', savedMessage);
-
-        // Send to specific recipient if online
         const recipientSocketId = connectedUsers[savedMessage.recipient_id];
         if (recipientSocketId) {
             // Emit directly to recipient's socket
@@ -220,19 +211,11 @@ io.on('connection', (socket) => {
         socket.emit('messageSent', savedMessage);
 
     } catch (error) {
-        // Differentiate between follow check error and other errors if needed
-        // The follow check endpoint should ideally return a specific status code or message
+       
         if (error.response && error.response.status === 403) {
              // Assume 403 is from our mutual follow check endpoint
              console.log("[Message] Mutual follow check failed:", error.response?.data?.error || error.message);
-             // The error message might already be sent by the endpoint, but ensure one is sent
-             // socket.emit('messageError', { error: error.response?.data?.error || 'Messaging restricted.' });
-             // If the Laravel endpoint emits the messageError, you might not need this line here.
-             // However, if it just returns data, you need to emit the error from Node.
-             // Let's assume the Laravel endpoint just returns data { is_mutual_follow: false }
-             // Then the check `if (!isMutualFollow)` above handles emitting the error.
-             // If the Laravel endpoint itself sends a 403 response with an error message,
-             // this block will catch it.
+           
              socket.emit('messageError', { error: error.response?.data?.error || 'Messaging restricted by follow rules.' });
         } else {
             console.error("[Message] Error processing message:", error.response?.data || error.message);
