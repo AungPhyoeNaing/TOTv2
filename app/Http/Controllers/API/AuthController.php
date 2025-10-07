@@ -19,7 +19,15 @@ class AuthController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
+            'email' => [
+                'required',
+                'string',
+                'email',
+                'max:255',
+                'unique:users',
+                'ends_with:@tot.com', // Ensure email ends with @tot.com
+            ],
+            'recovery_email' => 'required|email|max:255', // Validate recovery email
             'password' => [
                 'required',
                 'string',
@@ -29,11 +37,13 @@ class AuthController extends Controller
             ],
         ], [
             'password.regex' => 'The password must contain at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&).',
+            'email.ends_with' => 'Email must be a valid @tot.com address.', // Custom message for @tot.com rule
         ]);
 
         $user = User::create([
             'name' => $request->name,
-            'email' => $request->email,
+            'email' => $request->email, // Store the @tot.com email
+            'recovery_email' => $request->recovery_email, // Store the recovery email
             'password' => Hash::make($request->password),
         ]);
 
@@ -43,7 +53,7 @@ class AuthController extends Controller
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
-                'email' => $user->email,
+                'email' => $user->email, // Send the @tot.com email
                 'is_following' => false, // default, since they're new to other users' lists
             ]
         ]);

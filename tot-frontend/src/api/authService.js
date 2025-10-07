@@ -1,5 +1,6 @@
+// src/api/authService.js
 import apiClient from "./apiClient";
-import axios from "axios";
+import axios from "axios"; // Keep axios for CSRF if needed
 
 const BASE_URL = "http://127.0.0.1:8000";
 
@@ -9,18 +10,24 @@ export const getCsrfToken = () =>
 export const login = (email, password) => 
   apiClient.post("/login", { email, password });
 
-export const register = (name, email, password, password_confirmation) => 
-  apiClient.post("/register", { name, email, password, password_confirmation });
+export const register = (name, email, recovery_email, password, passwordConfirmation) => 
+  apiClient.post("/register", { 
+    name, 
+    email, 
+    recovery_email, 
+    password, 
+    password_confirmation: passwordConfirmation 
+  });
 
-
+// Remove /api prefix from the endpoint path
 export const requestPasswordReset = async (data) => {
-  const response = await axios.post("/api/submit-password-reset-request", data);
+  const response = await apiClient.post("/submit-password-reset-request", data); // Removed /api/
   return response;
 };
 
-
+// Remove /api prefix from the endpoint path
 export const reportUser = async (data) => {
-  const response = await axios.post("/api/submit-user-report", data);
+  const response = await apiClient.post("/submit-user-report", data); // Removed /api/
   return response;
 };
 

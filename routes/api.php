@@ -9,6 +9,7 @@ use App\Http\Controllers\API\ReactionController;
 use App\Http\Controllers\API\CommentController;
 use App\Http\Controllers\API\MessageController;
 use App\Http\Controllers\API\FollowController;
+use App\Http\Controllers\API\UserReportController;
 // --- End new imports ---
 
 /*
@@ -69,4 +70,6 @@ Route::middleware('auth:sanctum')->group(function () {
   
     Route::post('/messages', [MessageController::class, 'store']);
     Route::get('/messages/{userId}', [MessageController::class, 'index']); // Get chat history with a user
+
+     Route::post('/submit-user-report', [UserReportController::class, 'submitReport']);
 });

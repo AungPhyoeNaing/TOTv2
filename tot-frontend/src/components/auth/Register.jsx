@@ -1,9 +1,11 @@
+// src/components/auth/Register.jsx
 import React, { useState } from "react";
 import { getCsrfToken, register as authServiceRegister } from "../../api/authService";
 
 export default function Register({ onRegister, onSwitchToLogin }) {
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(""); // This will be the @tot.com email
+  const [recovery_email, setRecoveryEmail] = useState(""); // Add state for recovery email
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [error, setError] = useState(null);
@@ -19,9 +21,11 @@ export default function Register({ onRegister, onSwitchToLogin }) {
 
     try {
       await getCsrfToken();
+      // Pass the recovery_email to the API call
       const response = await authServiceRegister(
         name,
         email,
+        recovery_email, // Include recovery_email
         password,
         passwordConfirmation
       );
@@ -53,9 +57,18 @@ export default function Register({ onRegister, onSwitchToLogin }) {
         <input
           type="email"
           name="email"
-          placeholder="Email address"
+          placeholder="@tot.com Email Address"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          required
+        />
+        {/* Add the recovery email input field */}
+        <input
+          type="email"
+          name="recovery_email"
+          placeholder="Recovery Email (!Important. You need a valid gmail here)"
+          value={recovery_email}
+          onChange={(e) => setRecoveryEmail(e.target.value)}
           required
         />
         <input
