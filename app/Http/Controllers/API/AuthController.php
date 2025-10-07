@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Http\Controllers\API;
+
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Hash;
 use App\Http\Controllers\Controller;
@@ -19,7 +20,15 @@ class AuthController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:8|confirmed',
+            'password' => [
+                'required',
+                'string',
+                'min:8', // Minimum length of 8
+                'confirmed', // Must match password_confirmation field
+                'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/', // At least one lowercase, one uppercase, one number, one special character
+            ],
+        ], [
+            'password.regex' => 'The password must contain at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&).',
         ]);
 
         $user = User::create([
@@ -31,13 +40,13 @@ class AuthController extends Controller
         $token = $user->createToken('api-token')->plainTextToken;
 
         Http::post('http://localhost:3001/api/notify-login', [
-        'user' => [
-            'id' => $user->id,
-            'name' => $user->name,
-            'email' => $user->email,
-            'is_following' => false, // default, since they're new to other users' lists
-        ]
-    ]);
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'is_following' => false, // default, since they're new to other users' lists
+            ]
+        ]);
 
         return response()->json([
             'user' => $user,
@@ -108,33 +117,33 @@ class AuthController extends Controller
     }
 
     public function isMutualFollow(User $user, User $otherUser)
-{
-    // Get the currently authenticated user from the request/token
-    $authenticatedUser = Auth::user();
+    {
+        // Get the currently authenticated user from the request/token
+        $authenticatedUser = Auth::user();
 
-    // Ensure the user is authenticated
-    if (!$authenticatedUser) {
-         return response()->json(['error' => 'Unauthenticated.'], 401);
+        // Ensure the user is authenticated
+        if (!$authenticatedUser) {
+             return response()->json(['error' => 'Unauthenticated.'], 401);
+        }
+
+        // Authorization check: The authenticated user must be involved in the check.
+        if ($authenticatedUser->id !== $user->id && $authenticatedUser->id !== $otherUser->id) {
+            return response()->json(['error' => 'You are not authorized to check the follow status between these users.'], 403);
+        }
+
+        // Prevent checking if a user follows themselves
+        if ($user->id === $otherUser->id) {
+             return response()->json(['is_mutual_follow' => false]);
+        }
+
+        // --- CORRECTED COLUMN NAME ---
+        // Use the actual column name from your 'follows' table (e.g., 'followee_id')
+        $isUserFollowingOther = $user->following()->where('followee_id', $otherUser->id)->exists(); // Changed 'followed_user_id' to 'followee_id'
+        $isOtherFollowingUser = $otherUser->following()->where('followee_id', $user->id)->exists(); // Changed 'followed_user_id' to 'followee_id'
+        // --- END CORRECTION ---
+
+        $isMutual = $isUserFollowingOther && $isOtherFollowingUser;
+
+        return response()->json(['is_mutual_follow' => $isMutual]);
     }
-
-    // Authorization check: The authenticated user must be involved in the check.
-    if ($authenticatedUser->id !== $user->id && $authenticatedUser->id !== $otherUser->id) {
-        return response()->json(['error' => 'You are not authorized to check the follow status between these users.'], 403);
-    }
-
-    // Prevent checking if a user follows themselves
-    if ($user->id === $otherUser->id) {
-         return response()->json(['is_mutual_follow' => false]);
-    }
-
-    // --- CORRECTED COLUMN NAME ---
-    // Use the actual column name from your 'follows' table (e.g., 'followee_id')
-    $isUserFollowingOther = $user->following()->where('followee_id', $otherUser->id)->exists(); // Changed 'followed_user_id' to 'followee_id'
-    $isOtherFollowingUser = $otherUser->following()->where('followee_id', $user->id)->exists(); // Changed 'followed_user_id' to 'followee_id'
-    // --- END CORRECTION ---
-
-    $isMutual = $isUserFollowingOther && $isOtherFollowingUser;
-
-    return response()->json(['is_mutual_follow' => $isMutual]);
-}
 }

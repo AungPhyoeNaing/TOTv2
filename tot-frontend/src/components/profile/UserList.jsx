@@ -1,3 +1,4 @@
+// src/components/profile/UserList.jsx (Updated button handler)
 import React from "react";
 
 export default function UserList({ 
@@ -6,7 +7,8 @@ export default function UserList({
   onFollow, 
   onUnfollow, 
   onViewProfile,
-  onChat // <-- 1. Accept the onChat prop
+  onChat, // <-- Accept the onChat prop
+  onReportUser // <-- Accept the new onReportUser prop
 }) {
   const validUsers = Array.isArray(users) ? users : [];
     
@@ -30,12 +32,18 @@ export default function UserList({
                 >
                   View Profile
                 </button>
-                 {/* 2. Add the Message button */}
                 <button 
-                  className="secondary message-btn" // You can add specific CSS classes if needed
-                  onClick={() => onChat(user)} // <-- Call onChat with the user object
+                  className="secondary message-btn"
+                  onClick={() => onChat(user)}
                 >
                   Message
+                </button>
+                {/* Updated button handler to pass both user.id and user.name */}
+                <button 
+                  className="secondary report-btn"
+                  onClick={() => onReportUser(user.id, user.name)} // Pass both ID and NAME
+                >
+                  Report
                 </button>
               </div>
                 

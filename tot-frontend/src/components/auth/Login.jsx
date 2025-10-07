@@ -1,7 +1,8 @@
+// src/components/auth/Login.jsx
 import React, { useState } from "react";
 import { getCsrfToken, login as authServiceLogin } from "../../api/authService";
 
-export default function Login({ onLogin, onSwitchToRegister }) {
+export default function Login({ onLogin, onSwitchToRegister, onSwitchToPasswordResetRequest }) { // Add onSwitchToPasswordResetRequest prop
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
@@ -49,6 +50,13 @@ export default function Login({ onLogin, onSwitchToRegister }) {
         <button type="submit">Login</button>
       </form>
       
+      {/* Link to Password Reset Request page */}
+      <p className="switch-link">
+        <button type="button" onClick={onSwitchToPasswordResetRequest}>
+          Forgot Password?
+        </button>
+      </p>
+
       <p className="switch-link">
         Don't have an account?{" "}
         <button type="button" onClick={onSwitchToRegister}>
