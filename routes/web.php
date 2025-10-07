@@ -23,7 +23,13 @@ Route::get('/', function () {
 Route::get('/admin/login', [AdminController::class, 'showLoginForm'])->name('admin.login');
 Route::post('/admin/login', [AdminController::class, 'login'])->name('admin.login.post');
 Route::get('/admin/panel', [AdminController::class, 'showPanel'])->name('admin.panel')->middleware('admin'); // Optional: Add middleware
-Route::post('/admin/logout', [AdminController::class, 'logout'])->name('admin.logout')->middleware('admin'); // Optional: Add middleware
+Route::get('/admin/logout', [AdminController::class, 'logout'])->name('admin.logout')->middleware('admin'); // Optional: Add middleware
+
+
+// Routes for managing users and posts (within admin panel)
+Route::delete('/admin/users/{id}', [AdminController::class, 'deleteUser'])->name('admin.delete-user')->middleware('admin');
+Route::delete('/admin/posts/{id}', [AdminController::class, 'deletePost'])->name('admin.delete-post')->middleware('admin');
+
 
 // Optional: Route for marking reports reviewed
 Route::patch('/admin/reports/{id}/review', [AdminController::class, 'markReportReviewed'])->name('admin.mark-report-reviewed')->middleware('admin');
