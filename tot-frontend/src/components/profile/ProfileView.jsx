@@ -47,7 +47,7 @@ export default function ProfileView({
         {/* Profile Avatar/Image */}
         <div className="profile-avatar">
           <img
-            src="https://placehold.co/120" // Placeholder image, replace with actual user avatar if available
+            src="https://placehold.co/120  " // Placeholder image, replace with actual user avatar if available
             alt={`${profileUser.name}'s avatar`}
           />
         </div>
@@ -154,8 +154,6 @@ export default function ProfileView({
             )}
           </div>
         )}
-
-        
       </div>
     </div>
   );

@@ -365,6 +365,80 @@
   transform: translateY(-1px);
 }
 
+/* Add to Feed.css */
+.single-post-view {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.post-view-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e1e5e9;
+}
+
+.back-button {
+  background: #f0f2f5;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-right: 10px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.back-button:hover {
+  background: #e4e6e9;
+}
+
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+}
+
+.modal-header {
+  padding: 15px 20px;
+  border-bottom: 1px solid #e1e5e9;
+  position: relative;
+}
+
+.close-button {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #65676b;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
 /* Mobile Responsive */
 @media (max-width: 768px) {
   .feed {

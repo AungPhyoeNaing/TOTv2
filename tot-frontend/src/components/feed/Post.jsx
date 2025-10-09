@@ -1,5 +1,3 @@
-
-
 // src/components/feed/Post.jsx
 import React, { useState, useEffect } from "react";
 import {
@@ -24,7 +22,7 @@ const ReactionButton = ({ type, count, isActive, onClick, disabled, ariaLabel })
 // --- End ReactionButton ---
 
 // Accept the socket prop
-const Post = ({ post, currentUser, onDeletePost, socket, onViewProfile }) => { // <-- Accept socket prop
+const Post = ({ post, currentUser, onDeletePost, socket, onViewProfile, onViewOriginalPost }) => { // <-- Added onViewOriginalPost prop
   // --- State initialization ---
   const [counts, setCounts] = useState({
     reactions: post.reactions_count || 0,
@@ -209,7 +207,12 @@ const Post = ({ post, currentUser, onDeletePost, socket, onViewProfile }) => { /
       onDeletePost(post.id);
     }
   };
-  // --- End Handler Functions ---
+
+  const handleViewOriginalPost = () => {
+  if (onViewOriginalPost) {
+    onViewOriginalPost(post.shared_post.id); // ✅ Use the shared post's ID
+  }
+};
 
   // --- Render Return ---
   return (
@@ -219,14 +222,26 @@ const Post = ({ post, currentUser, onDeletePost, socket, onViewProfile }) => { /
       <header className="post-header">
         <div>
           <strong
-          onClick={() => {
+            onClick={() => {
               if (onViewProfile) {
                 onViewProfile(post.user_id); // Call onViewProfile with the author's ID
               }
             }}
             style={{ cursor: 'pointer', color: 'blue' }} 
-          >{post.user?.name}</strong>
-          {post.shared_post_id && <span className="shared-indicator"> shared a post</span>}
+          >
+            {post.user?.name}
+          </strong>
+          {post.shared_post_id && (
+            <span className="shared-indicator">
+              <span> shared </span>
+              <strong 
+                onClick={() => onViewProfile && onViewProfile(post.shared_post?.user_id)}
+                style={{ cursor: 'pointer', color: 'blue' }}
+              >
+                {post.shared_post?.user?.name}
+              </strong>'s post
+            </span>
+          )}
         </div>
         {isPostAuthor && (
           <button onClick={handleDelete} className="delete-button" aria-label="Delete post">
@@ -236,49 +251,122 @@ const Post = ({ post, currentUser, onDeletePost, socket, onViewProfile }) => { /
       </header>
 
       <div className="post-body">
-        <p>{post.body}</p>
+        {/* Current post body (only if exists and is not a share) */}
+        {post.body && !post.shared_post_id && <p>{post.body}</p>}
+        
+        {/* Current post media */}
         {post.media_url && (
-  <div className="post-media" style={{ marginTop: '12px', marginBottom: '12px' }}>
-    {post.media_type === 'image' && (
-      <img
-        src={post.media_url}
-        alt="Post media"
-        style={{
-          maxWidth: '100%',
-          maxHeight: '400px',
-          borderRadius: '8px',
-          objectFit: 'contain',
-        }}
-      />
-    )}
+          <div className="post-media" style={{ marginTop: '12px', marginBottom: '12px' }}>
+            {post.media_type === 'image' && (
+              <img
+                src={post.media_url}
+                alt="Post media"
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '400px',
+                  borderRadius: '8px',
+                  objectFit: 'contain',
+                }}
+              />
+            )}
 
-    {post.media_type === 'video' && (
-      <video
-        controls
-        src={post.media_url}
-        style={{
-          maxWidth: '100%',
-          maxHeight: '400px',
-          borderRadius: '8px',
-        }}
-        preload="metadata"
-      >
-        Your browser does not support the video tag.
-      </video>
-    )}
+            {post.media_type === 'video' && (
+              <video
+                controls
+                src={post.media_url}
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '400px',
+                  borderRadius: '8px',
+                }}
+                preload="metadata"
+              >
+                Your browser does not support the video tag.
+              </video>
+            )}
 
-    {post.media_type === 'audio' && (
-      <div style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
-        <audio controls src={post.media_url} style={{ width: '100%' }}>
-          Your browser does not support the audio tag.
-        </audio>
-      </div>
-    )}
-  </div>
-)}
+            {post.media_type === 'audio' && (
+              <div style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
+                <audio controls src={post.media_url} style={{ width: '100%' }}>
+                  Your browser does not support the audio tag.
+                </audio>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Shared post content (only if this is a shared post) */}
         {post.shared_post && (
-          <div className="shared-post-snippet">
-            <p><strong>{post.shared_post.user?.name}:</strong> {post.shared_post.body}</p>
+          <div className="shared-post-container">
+            <div className="shared-post-header">
+              <div 
+                onClick={() => onViewProfile && onViewProfile(post.shared_post.user_id)}
+                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+              >
+                {/* <img 
+                  src={post.shared_post.user?.avatar} 
+                  alt={`${post.shared_post.user?.name} avatar`}
+                  style={{ width: '32px', height: '32px', borderRadius: '50%', marginRight: '8px' }}
+                />
+                <strong>{post.shared_post.user?.name}</strong> */}
+              </div>
+            </div>
+            
+            <div className="shared-post-content">
+              {post.shared_post.body && <p>{post.shared_post.body}</p>}
+              
+              {/* Shared post media */}
+              {post.shared_post.media_url && (
+                <div className="post-media" style={{ marginTop: '12px', marginBottom: '12px' }}>
+                  {post.shared_post.media_type === 'image' && (
+                    <img
+                      src={post.shared_post.media_url}
+                      alt="Shared post media"
+                      style={{
+                        maxWidth: '100%',
+                        maxHeight: '400px',
+                        borderRadius: '8px',
+                        objectFit: 'contain',
+                      }}
+                    />
+                  )}
+
+                  {post.shared_post.media_type === 'video' && (
+                    <video
+                      controls
+                      src={post.shared_post.media_url}
+                      style={{
+                        maxWidth: '100%',
+                        maxHeight: '400px',
+                        borderRadius: '8px',
+                      }}
+                      preload="metadata"
+                    >
+                      Your browser does not support the video tag.
+                    </video>
+                  )}
+
+                  {post.shared_post.media_type === 'audio' && (
+                    <div style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
+                      <audio controls src={post.shared_post.media_url} style={{ width: '100%' }}>
+                        Your browser does not support the audio tag.
+                      </audio>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* View Original Post Button */}
+              <div className="view-original-post-section">
+                <button 
+                  className="view-original-post-btn"
+                  onClick={handleViewOriginalPost}
+                  aria-label="View original post"
+                >
+                  View Original Post
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
