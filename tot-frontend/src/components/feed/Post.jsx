@@ -220,32 +220,36 @@ const Post = ({ post, currentUser, onDeletePost, socket, onViewProfile, onViewOr
       {error && <div className="post-error">{error}</div>}
 
       <header className="post-header">
-        <div>
-          <strong
-            onClick={() => {
-              if (onViewProfile) {
-                onViewProfile(post.user_id); // Call onViewProfile with the author's ID
-              }
-            }}
-            style={{ cursor: 'pointer', color: 'blue' }} 
-          >
-            {post.user?.name}
-          </strong>
-          {post.shared_post_id && (
-            <span className="shared-indicator">
-              <span> shared </span>
-              <strong 
-                onClick={() => onViewProfile && onViewProfile(post.shared_post?.user_id)}
-                style={{ cursor: 'pointer', color: 'blue' }}
-              >
-                {post.shared_post?.user?.name}
-              </strong>'s post
-            </span>
-          )}
+        {/* Author Avatar and Name */}
+        <div className="post-author" onClick={() => onViewProfile && onViewProfile(post.user_id)} style={{ cursor: 'pointer' }}>
+          <img
+            src={post.user?.avatar || post.user?.profile_picture || "https://placehold.co/40"} // Use avatar or profile_picture, fallback to placeholder
+            alt={`${post.user?.name || 'User'}'s avatar`}
+            className="post-author-avatar"
+          />
+          <div>
+            <strong>{post.user?.name || 'Unknown User'}</strong>
+            {post.shared_post_id && (
+              <span className="shared-indicator">
+                <span> shared </span>
+                <strong
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevent triggering parent onClick
+                    onViewProfile && onViewProfile(post.shared_post?.user_id);
+                  }}
+                  style={{ cursor: 'pointer', color: 'blue' }}
+                >
+                  {post.shared_post?.user?.name}
+                </strong>'s post
+              </span>
+            )}
+          </div>
         </div>
+
+        {/* Delete Button (only for author) */}
         {isPostAuthor && (
           <button onClick={handleDelete} className="delete-button" aria-label="Delete post">
-            Delete
+            &times;
           </button>
         )}
       </header>
@@ -299,16 +303,17 @@ const Post = ({ post, currentUser, onDeletePost, socket, onViewProfile, onViewOr
         {post.shared_post && (
           <div className="shared-post-container">
             <div className="shared-post-header">
-              <div 
+              <div
                 onClick={() => onViewProfile && onViewProfile(post.shared_post.user_id)}
                 style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
               >
-                {/* <img 
-                  src={post.shared_post.user?.avatar} 
-                  alt={`${post.shared_post.user?.name} avatar`}
+                <img
+                  src={post.shared_post.user?.avatar || post.shared_post.user?.profile_picture || "https://placehold.co/32"} // Avatar for shared post author
+                  alt={`${post.shared_post.user?.name || 'User'} avatar`}
+                  className="shared-post-author-avatar" // Different class for sizing if needed
                   style={{ width: '32px', height: '32px', borderRadius: '50%', marginRight: '8px' }}
                 />
-                <strong>{post.shared_post.user?.name}</strong> */}
+                <strong>{post.shared_post.user?.name}</strong>
               </div>
             </div>
             
@@ -440,7 +445,17 @@ const Post = ({ post, currentUser, onDeletePost, socket, onViewProfile, onViewOr
             <ul className="comments-list">
               {comments.map((comment) => (
                 <li key={comment.id} className="comment-item">
-                  <strong>{comment.user?.name}:</strong> {comment.body}
+                  {/* Comment Author Avatar */}
+                  <div className="comment-author">
+                    <img
+                      src={comment.user?.avatar || comment.user?.profile_picture || "https://placehold.co/24"} // Avatar for comment author
+                      alt={`${comment.user?.name || 'User'} avatar`}
+                      className="comment-author-avatar" // Different class for sizing if needed
+                      style={{ width: '24px', height: '24px', borderRadius: '50%', marginRight: '8px' }}
+                    />
+                    <strong>{comment.user?.name}:</strong>
+                  </div>
+                  <span>{comment.body}</span>
                 </li>
               ))}
             </ul>

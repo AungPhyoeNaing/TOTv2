@@ -1,7 +1,7 @@
 <?php
 
 namespace App\Http\Controllers\API;
-
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Hash;
 use App\Http\Controllers\Controller;
@@ -155,5 +155,77 @@ class AuthController extends Controller
         $isMutual = $isUserFollowingOther && $isOtherFollowingUser;
 
         return response()->json(['is_mutual_follow' => $isMutual]);
+    }
+
+     // Updated updateProfile method to use 'avatar' column
+     public function updateProfile(Request $request)
+    {
+        // Get the authenticated user
+        $user = Auth::user();
+
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+
+        // Validate the request data
+        $request->validate([
+            'name' => 'sometimes|string|max:255', // 'sometimes' means it's only validated if present
+            'profile_picture' => 'sometimes|image|mimes:jpeg,png,jpg,gif,webp|max:2048', // Max 2MB - This is the form field name
+        ]);
+
+        $updateData = [];
+
+        // Check if 'name' is provided in the request and is different
+        if ($request->filled('name') && $request->name !== $user->name) {
+            $updateData['name'] = $request->name;
+        }
+
+        // Check if 'profile_picture' is provided in the request
+        if ($request->hasFile('profile_picture')) {
+            $profilePicture = $request->file('profile_picture');
+
+            // Validate the image (this is also done in rules above, but good practice here too)
+            if (!$profilePicture->isValid()) {
+                return response()->json(['message' => 'Invalid profile picture file.'], 422);
+            }
+
+            // Generate a unique filename
+            $filename = time() . '_' . $user->id . '.' . $profilePicture->getClientOriginalExtension();
+
+            // Define the directory to store profile pictures (adjust as needed)
+            $directory = 'profile_pictures';
+
+            // Store the file in the 'public' disk (or your preferred disk)
+            $path = $profilePicture->storeAs($directory, $filename, 'public');
+
+            // Construct the public URL for the stored image
+            $publicUrl = url(Storage::url($path));
+
+            // Add the new profile picture path/URL to the update data using the correct DB column name 'avatar'
+            $updateData['avatar'] = $publicUrl; // Use 'avatar' here
+
+            // Optional: Delete the old profile picture if it existed and wasn't a default
+            // if ($user->avatar && !str_starts_with($user->avatar, 'http')) { // Check if it's a local path
+            //     $oldPath = str_replace(Storage::url(''), '', $user->avatar); // Reverse the URL to get path
+            //     if (Storage::disk('public')->exists($oldPath)) {
+            //         Storage::disk('public')->delete($oldPath);
+            //     }
+            // }
+        }
+
+
+        // If no data to update was provided, return early
+        if (empty($updateData)) {
+            return response()->json(['message' => 'No changes provided.', 'user' => $user], 200);
+        }
+
+        // Update the user model with the validated data
+        $user->update($updateData); // This will update 'name' and/or 'avatar'
+
+        // Return the updated user data
+        return response()->json([
+            'message' => 'Profile updated successfully!',
+            'user' => $user
+        ], 200);
     }
 }

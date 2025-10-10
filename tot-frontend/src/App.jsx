@@ -1,4 +1,3 @@
-// App.jsx
 import React, { useState, useEffect } from "react";
 import io from "socket.io-client"; // <-- Import Socket.IO Client
 import apiClient from "./api/apiClient";
@@ -10,9 +9,12 @@ import Feed from "./components/feed/Feed.jsx";
 import UserList from "./components/profile/UserList.jsx";
 import ProfileView from "./components/profile/ProfileView.jsx";
 import Chat from "./components/chat/Chat.jsx";
+import EditProfile from "./components/profile/EditProfile.jsx"; // Import the new component
 import PasswordResetRequest from "./components/auth/PasswordResetRequest.jsx"; // Import the new component
 import ReportUser from "./components/auth/ReportUser.jsx"; // Import the new component
-import { logout } from "./api/authService";
+// --- IMPORT THE NEW FUNCTION ---
+import { logout, updateProfile } from "./api/authService"; // Import updateProfile
+// --- END IMPORT ---
 import { deletePost } from "./api/postService";
 import "./App.css";
 
@@ -233,7 +235,84 @@ export default function App() {
       setError("Failed to unfollow user");
     }
   };
-  // --- End Handler Functions ---
+
+  // --- NEW HANDLER: Navigate to Edit Profile view ---
+  const handleGoToEditProfile = () => {
+    if (user) {
+        setCurrentView('editProfile');
+    }
+  };
+
+  // --- NEW HANDLER: Update user profile via API (Updated to use authService) ---
+  const handleUpdateProfile = async ({ username, profilePicture }) => {
+    if (!user) {
+        throw new Error("User not authenticated.");
+    }
+
+    // Prepare data object to pass to the service function
+    const profileUpdateData = { username, profilePicture };
+
+    // Check if there's anything to update *before* making the call
+    if (
+        (profileUpdateData.username === undefined || profileUpdateData.username === user.name) &&
+        !(profileUpdateData.profilePicture instanceof File)
+    ) {
+        console.log("No changes made to profile data.");
+        return; // Exit early if no changes
+    }
+
+    try {
+        // Call the new function in authService
+        const response = await updateProfile(profileUpdateData);
+
+        console.log("API Response:", response.data); // Log the full response
+
+        // Update the local user state with the response data
+        // Assumes the backend returns the updated user object, potentially under a 'user' key
+        const updatedUserData = response.data.user || response.data; // Fallback
+        setUser(updatedUserData);
+
+        // Optionally, update profileUser if currently on the profile view of the same user
+        if (profileUser && profileUser.id === user.id) {
+            setProfileUser(updatedUserData);
+        }
+
+        console.log("Profile updated successfully via API!");
+        // Optionally, you could show a success message to the user here
+
+    } catch (err) {
+        console.error("Full Error Object:", err); // Log the full error object
+        console.error("Error updating profile via API:");
+
+        let errorMessage = "Failed to update profile. Please try again later.";
+
+        if (err.response) {
+            // Server responded with error status
+            console.error("- Status:", err.response.status);
+            console.error("- Headers:", err.response.headers);
+            console.error("- Data:", err.response.data);
+
+            if (err.response.data && err.response.data.message) {
+                 errorMessage = err.response.data.message;
+            } else if (err.response.data && typeof err.response.data === 'object') {
+                // Handle validation errors (e.g., { name: ['The name field is required.'] })
+                errorMessage = Object.values(err.response.data).flat().join(', ') || errorMessage;
+            }
+
+        } else if (err.request) {
+            // Request made but no response received (network error)
+            console.error("- Request (no response):", err.request);
+             errorMessage = "Network error. Please check your connection and try again.";
+        } else {
+            // Something else happened in setting up the request
+            console.error("- Message:", err.message);
+        }
+
+        // Throw the constructed error message so the EditProfile component can catch it
+        throw new Error(errorMessage);
+    }
+  };
+  // --- END NEW HANDLERS ---
 
   // --- Modified useEffect Hook: Auth check, data fetch, and Socket.IO setup ---
   useEffect(() => {
@@ -435,7 +514,15 @@ export default function App() {
     console.log("App.jsx: Rendering loading screen.");
     return (
       <div className="centered-container">
-        <Header />
+        <Header
+            user={user}
+            currentView={currentView}
+            onGoToFeed={() => setCurrentView('feed')}
+            onGoToMyProfile={() => user && viewProfile(user.id)} // Ensure user exists
+            onGoToEditProfile={handleGoToEditProfile} // Pass the new handler
+            onGoToChat={() => setCurrentView('chat')}
+            onLogout={handleLogout}
+        />
         <main className="centered-main">
           <article aria-busy="true"></article>
           <p>Loading TOT....</p>
@@ -451,7 +538,8 @@ export default function App() {
         user={user}
         currentView={currentView}
         onGoToFeed={() => setCurrentView('feed')}
-        onGoToMyProfile={() => user && viewProfile(user.id)}
+        onGoToMyProfile={() => user && viewProfile(user.id)} // Ensure user exists
+        onGoToEditProfile={handleGoToEditProfile} // Pass the new handler
         onGoToChat={() => setCurrentView('chat')}
         onLogout={handleLogout}
       />
@@ -508,6 +596,12 @@ export default function App() {
               onChat={initiateChat}
               onReportUser={handleSwitchToReportUser} // Pass the handler to ProfileView component
             />
+          ) : currentView === 'editProfile' ? ( // Render EditProfile component
+              <EditProfile
+                user={user}
+                onUpdateProfile={handleUpdateProfile}
+                onGoToMyProfile={() => setCurrentView('profile')} // Navigate back to profile view
+              />
           ) : currentView === 'chat' ? (
             chatWithUser && chatWithUser.id ? (
               <Chat

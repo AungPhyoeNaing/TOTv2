@@ -30,7 +30,7 @@ export default function ProfileView({
   // Determine if the current user is following the profile user
   // Use optional chaining and nullish coalescing for safety
   const isFollowing = profileUser.is_following ?? false;
-  const isMutualFollow = profileData?.isMutualFollow ?? false; 
+  const isMutualFollow = profileData?.isMutualFollow ?? false;
   // Handler for follow/unfollow button click
   const handleFollowAction = () => {
     if (isFollowing) {
@@ -47,8 +47,9 @@ export default function ProfileView({
         {/* Profile Avatar/Image */}
         <div className="profile-avatar">
           <img
-            src="https://placehold.co/120  " // Placeholder image, replace with actual user avatar if available
-            alt={`${profileUser.name}'s avatar`}
+            // Use the profileUser's avatar field (returned by backend), fallback to placeholder if not available
+            src={profileUser.avatar || "https://placehold.co/120"} // Changed this line to use 'avatar'
+            alt={`${profileUser.name || 'User'}'s avatar`}
           />
         </div>
 
@@ -119,7 +120,7 @@ export default function ProfileView({
 
       <div className="profile-content">
         {/* Display list of users being followed */}
-       
+
         {activeTab === 'following' && (
           <UserGrid
             users={profileData.following ?? []}

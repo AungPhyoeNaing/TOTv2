@@ -667,6 +667,61 @@
   }
 }
 
+/* Post.css */
+
+/* Container for the post header */
+.post-header {
+  display: flex;
+  justify-content: space-between; /* Space between author info and delete button */
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e0e0e0; /* Optional: subtle separation line */
+}
+
+/* Container for author avatar and name */
+.post-author {
+  display: flex;
+  align-items: center; /* Vertically center avatar and text */
+  gap: 0.5rem; /* Space between avatar and text */
+}
+
+/* Style for the author's avatar image */
+.post-author-avatar {
+  width: 40px; /* Set desired width */
+  height: 40px; /* Set desired height */
+  border-radius: 50%; /* Make it circular */
+  object-fit: cover; /* Ensure the image covers the area without distortion */
+  flex-shrink: 0; /* Prevent the avatar from shrinking if text is long */
+}
+
+/* Optional: Add a hover effect to indicate it's clickable */
+.post-author:hover .post-author-avatar {
+  opacity: 0.8; /* Slight opacity change on hover */
+}
+
+/* Style for the shared post indicator text */
+.shared-indicator {
+  font-size: 0.85em; /* Slightly smaller font */
+  color: #666; /* Muted color */
+  margin-left: 0.5rem; /* Space from main author name */
+}
+
+/* Style for the delete button */
+.delete-button {
+  background: none;
+  border: none;
+  font-size: 1.2rem; /* Larger 'x' */
+  cursor: pointer;
+  color: #999; /* Muted color */
+  padding: 0.2rem 0.4rem; /* Small padding */
+  border-radius: 4px; /* Rounded corners */
+}
+
+.delete-button:hover {
+  background-color: #f0f0f0; /* Light background on hover */
+  color: #333; /* Darker color on hover */
+}
+
 @media (max-width: 480px) {
   .post-card {
     padding: 1rem;

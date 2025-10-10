@@ -1,16 +1,47 @@
-// src/components/layout/Header.jsx
+// src/components/layout/Header.jsx (Refined)
 import React from "react";
 
-export default function Header({ 
-  user, 
+// Define the mapping between views and their header buttons
+// Each button definition includes the text and the *name* of the handler prop
+const viewButtonMap = {
+  feed: [
+    { text: 'My Profile', handlerName: 'onGoToMyProfile' },
+    { text: 'Messages', handlerName: 'onGoToChat' }
+  ],
+  profile: [
+    { text: 'Edit Profile', handlerName: 'onGoToEditProfile' },
+    { text: 'Back to Feed', handlerName: 'onGoToFeed' }
+  ],
+  editProfile: [
+    { text: 'Back to Feed', handlerName: 'onGoToFeed' }
+  ],
+  chat: [
+    { text: 'Back to Feed', handlerName: 'onGoToFeed' }
+  ]
+};
+
+export default function Header({
+  user,
   currentView, // Receive currentView prop
-  onGoToFeed, 
-  onGoToMyProfile, 
+  onGoToFeed,
+  onGoToMyProfile,
+  onGoToEditProfile, // Receive the new function
   onGoToChat, // Receive the function
-  onLogout 
+  onLogout
 }) {
   // If no user is logged in, don't render the header content
   if (!user) return null;
+
+  // Get the button configuration for the current view
+  const buttons = viewButtonMap[currentView] || viewButtonMap.feed; // Fallback to feed buttons
+
+  // Create a mapping object for handler functions to make dynamic access easier
+  const handlerMap = {
+    onGoToFeed,
+    onGoToMyProfile,
+    onGoToEditProfile,
+    onGoToChat
+  };
 
   return (
     <header>
@@ -19,52 +50,20 @@ export default function Header({
           <li><strong>TOT</strong></li>
         </ul>
         <ul>
-          {/* Conditional rendering based on currentView */}
-          {currentView === 'profile' ? (
-            // Show 'Back to Feed' when on Profile
-            <li>
-              <button 
-                className="secondary outline" 
-                onClick={onGoToFeed}
+          {buttons.map((buttonDef, index) => (
+            <li key={index}>
+              <button
+                className="secondary outline"
+                onClick={handlerMap[buttonDef.handlerName]} // Dynamically access the handler function
               >
-                Back to Feed
+                {buttonDef.text}
               </button>
             </li>
-          ) : currentView === 'chat' ? (
-            // Show 'Back to Feed' when on Chat
-            <li>
-              <button 
-                className="secondary outline" 
-                onClick={onGoToFeed}
-              >
-                Back to Feed
-              </button>
-            </li>
-           ) : (
-            // Show 'My Profile' and 'Messages' when on Feed (default/main view)
-            <>
-              <li>
-                <button 
-                  className="secondary outline" 
-                  onClick={onGoToMyProfile}
-                >
-                  My Profile
-                </button>
-              </li>
-              <li>
-                <button 
-                  className="secondary outline" 
-                  onClick={onGoToChat}
-                >
-                  Messages
-                </button>
-              </li>
-            </>
-          )}
+          ))}
           {/* Always show Logout */}
           <li>
-            <button 
-              className="secondary outline logout-button" 
+            <button
+              className="secondary outline logout-button"
               onClick={onLogout}
             >
               Logout
