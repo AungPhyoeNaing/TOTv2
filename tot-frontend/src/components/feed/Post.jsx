@@ -190,18 +190,41 @@ const Post = ({ post, currentUser, onDeletePost, socket, onViewProfile, onViewOr
     setActionLoading(true);
     setError(null);
     try {
-      const response = await sharePost(post.id);
-      console.log("Share response:", response.data);
+      // Determine the ID of the *original* post to share.
+      // If the current post is a share wrapper (has 'shared_post'), get the ID of the original post inside it.
+      // Otherwise, the current post *is* the original, so use its ID.
+      const originalPostIdToShare = post.shared_post ? post.shared_post.id : post.id;
+
+      console.log(`Attempting to share original post with ID: ${originalPostIdToShare} (from displayed post ID: ${post.id})`);
+      
+      const response = await sharePost(originalPostIdToShare); // Share the original post
+      
+      console.log("Share API response:", response.data);
+      
+      // Update the share count for the *currently displayed* post in the UI.
+      // This provides visual feedback for the action taken on the post visible to the user.
+      // The backend should handle incrementing the original post's share count internally,
+      // potentially via triggers or application logic linked to the originalPostIdToShare.
       setCounts(prev => ({ ...prev, shares: prev.shares + 1 }));
-      alert("Post shared!");
+      
+      // Optional: Emit a real-time update event for the *currently displayed* post's share count
+      // if your application updates it via websockets.
+      // if (socket) {
+      //   socket.emit('postShared', { postId: post.id }); // Or maybe originalPostIdToShare if backend handles it
+      // }
+
+      alert("Original post shared!");
     } catch (err) {
       console.error("Share error:", err);
-      setError("Failed to share post.");
+      if (err.response && err.response.status === 429) {
+        setError("Too many requests. Please wait and try again.");
+      } else {
+        setError("Failed to share post.");
+      }
     } finally {
       setActionLoading(false);
     }
   };
-
   const handleDelete = () => {
     if (onDeletePost) {
       onDeletePost(post.id);
