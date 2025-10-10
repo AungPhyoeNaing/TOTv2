@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\API\PostController;
+use App\Http\Controllers\CategoryController; // Import the CategoryController
 // --- Import the new controllers ---
 use App\Http\Controllers\API\ReactionController;
 use App\Http\Controllers\API\CommentController;
@@ -55,7 +56,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Route to get the list of users for the follow feature
     Route::get('/users', [AuthController::class, 'index']);
-
+    Route::get('/categories', [CategoryController::class, 'index']);
 
     Route::post('/posts/{post}/reactions/toggle', [ReactionController::class, 'toggle']);
    

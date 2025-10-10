@@ -252,6 +252,7 @@ const Post = ({ post, currentUser, onDeletePost, socket, onViewProfile, onViewOr
           />
           <div>
             <strong>{post.user?.name || 'Unknown User'}</strong>
+            
             {post.shared_post_id && (
               <span className="shared-indicator">
                 <span> shared </span>
@@ -268,6 +269,7 @@ const Post = ({ post, currentUser, onDeletePost, socket, onViewProfile, onViewOr
             )}
           </div>
         </div>
+        {post.category && <span className="cat-badge">{post.category.name}</span>}
 
         {/* Delete Button (only for author) */}
         {isPostAuthor && (

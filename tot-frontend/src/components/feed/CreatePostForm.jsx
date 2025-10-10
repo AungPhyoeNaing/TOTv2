@@ -1,49 +1,40 @@
 import React, { useState, useRef, useEffect } from "react";
 import apiClient from "../../api/apiClient";
-import "./CreatePostForm.css"; // ✅ We'll create this
+import "./CreatePostForm.css";
 
-export default function CreatePostForm({ onCreatePost }) {
+export default function CreatePostForm({ onCreatePost, categories }) {
   const [body, setBody] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [posting, setPosting] = useState(false); // ✅ New: prevent double post
+  const [posting, setPosting] = useState(false);
   const [mediaUrl, setMediaUrl] = useState(null);
   const [mediaType, setMediaType] = useState(null);
   const [error, setError] = useState(null);
+  const [categoryId, setCategoryId] = useState("");
 
   const fileInputRef = useRef(null);
-  const readerRef = useRef(null); // ✅ To abort FileReader if needed
+  const readerRef = useRef(null);
 
-  // ✅ Cleanup FileReader on unmount
   useEffect(() => {
     return () => {
-      if (readerRef.current) {
-        readerRef.current.abort();
-      }
+      if (readerRef.current) readerRef.current.abort();
     };
   }, []);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
-    setError(null);
-
-    // Validate file size
     if (file.size > 20 * 1024 * 1024) {
       setError("File too large (max 20MB)");
       return;
     }
-
     setSelectedFile(file);
-
-    // Generate preview for images/videos
     if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
       readerRef.current = new FileReader();
       readerRef.current.onloadend = () => {
         setPreview(readerRef.current.result);
-        readerRef.current = null; // cleanup ref
+        readerRef.current = null;
       };
       readerRef.current.readAsDataURL(file);
     } else {
@@ -53,28 +44,20 @@ export default function CreatePostForm({ onCreatePost }) {
 
   const handleUpload = async () => {
     if (!selectedFile || uploading) return;
-
     setUploading(true);
     setError(null);
-
     const formData = new FormData();
     formData.append("file", selectedFile);
-
     try {
-      const response = await apiClient.post("/media/upload", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+      const { data } = await apiClient.post("/media/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
-
-      const { url, type } = response.data.data;
-      setMediaUrl(url);
-      setMediaType(type);
+      setMediaUrl(data.data.url);
+      setMediaType(data.data.type);
       setSelectedFile(null);
       setPreview(null);
     } catch (err) {
-      console.error("Upload error:", err);
-      setError(err.response?.data?.message || "Upload failed. Please try again.");
+      setError(err.response?.data?.message || "Upload failed.");
     } finally {
       setUploading(false);
     }
@@ -82,35 +65,31 @@ export default function CreatePostForm({ onCreatePost }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
+    if (!categoryId) {
+      setError("Please choose a category.");
+      return;
+    }
     const postData = {
       body: body.trim() || null,
       media_url: mediaUrl || null,
       media_type: mediaType || null,
+      category_id: Number(categoryId),
     };
-
-    console.log("Submitting post data:", postData);
-
     if (!postData.body && !postData.media_url) {
-      setError("Please add text or upload media.");
+      setError("Please add text or media.");
       return;
     }
-
-    setPosting(true); // ✅ Disable button during API call
-    setError(null); // ✅ Clear previous errors
-
+    setPosting(true);
+    setError(null);
     try {
       await onCreatePost(postData);
-      // ✅ Reset everything on success
       setBody("");
       setMediaUrl(null);
       setMediaType(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ""; // ✅ Clear file input
-      }
+      setCategoryId("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err) {
-      console.error("Post creation error:", err);
-      setError("Failed to create post. Please try again.");
+      setError("Failed to create post.");
     } finally {
       setPosting(false);
     }
@@ -124,9 +103,7 @@ export default function CreatePostForm({ onCreatePost }) {
     setError(null);
   };
 
-  const handleButtonClick = () => {
-    fileInputRef.current?.click(); // ✅ Trigger file input programmatically
-  };
+  const handleButtonClick = () => fileInputRef.current?.click();
 
   return (
     <article className="create-post-form">
@@ -141,7 +118,24 @@ export default function CreatePostForm({ onCreatePost }) {
           aria-label="Post content"
         />
 
-        {/* File Upload UI */}
+        {/* ---- CATEGORY PICKER ---- */}
+        <div className="category-picker">
+          <label htmlFor="cat">Category *</label>
+          <select
+            id="cat"
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+            required
+          >
+            <option value="" disabled>Select category…</option>
+            {categories?.length > 0 && categories.map((c) => (
+  <option key={c.id} value={c.id}>
+    {c.name}
+  </option>
+))}
+          </select>
+        </div>
+
         <div className="file-upload-section">
           <button
             type="button"
@@ -152,17 +146,15 @@ export default function CreatePostForm({ onCreatePost }) {
           >
             📷 Choose Media
           </button>
-
           <input
             ref={fileInputRef}
             type="file"
             onChange={handleFileChange}
             accept="image/*,audio/*,video/*"
             disabled={uploading || posting}
-            style={{ display: "none" }} // ✅ Hide native input, use button instead
+            style={{ display: "none" }}
             aria-hidden="true"
           />
-
           {selectedFile && !mediaUrl && (
             <button
               type="button"
@@ -174,64 +166,31 @@ export default function CreatePostForm({ onCreatePost }) {
               {uploading ? "⏳ Uploading..." : "⬆️ Upload Media"}
             </button>
           )}
-
           {error && <p className="error-message">{error}</p>}
         </div>
 
-        {/* Preview or Uploaded Media */}
         {(preview || mediaUrl) && (
           <div className="media-preview-container">
             {preview && !mediaUrl && (
               <>
                 {selectedFile?.type.startsWith("image/") && (
-                  <img
-                    src={preview}
-                    alt="Preview"
-                    className="media-preview"
-                  />
+                  <img src={preview} alt="Preview" className="media-preview" />
                 )}
                 {selectedFile?.type.startsWith("video/") && (
-                  <video
-                    controls
-                    src={preview}
-                    className="media-preview"
-                    aria-label="Video preview"
-                  />
+                  <video controls src={preview} className="media-preview" aria-label="Video preview" />
                 )}
               </>
             )}
-
             {mediaUrl && (
               <>
-                {mediaType === "image" && (
-                  <img
-                    src={mediaUrl}
-                    alt="Uploaded media"
-                    className="media-preview"
-                  />
-                )}
+                {mediaType === "image" && <img src={mediaUrl} alt="Uploaded media" className="media-preview" />}
                 {mediaType === "video" && (
-                  <video
-                    controls
-                    src={mediaUrl}
-                    className="media-preview"
-                    aria-label="Uploaded video"
-                  />
+                  <video controls src={mediaUrl} className="media-preview" aria-label="Uploaded video" />
                 )}
                 {mediaType === "audio" && (
-                  <audio
-                    controls
-                    src={mediaUrl}
-                    className="audio-player"
-                    aria-label="Uploaded audio"
-                  />
+                  <audio controls src={mediaUrl} className="audio-player" aria-label="Uploaded audio" />
                 )}
-                <button
-                  type="button"
-                  onClick={removeMedia}
-                  className="remove-media-btn"
-                  aria-label="Remove media"
-                >
+                <button type="button" onClick={removeMedia} className="remove-media-btn" aria-label="Remove media">
                   ×
                 </button>
               </>

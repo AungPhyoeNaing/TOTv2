@@ -1,41 +1,50 @@
-// src/components/feed/Feed.jsx
 import React, { useState, useEffect } from "react";
 import CreatePostForm from "./CreatePostForm.jsx";
 import Post from "./Post.jsx";
 import "./Feed.css";
 
-// Accept the socket prop
-const Feed = ({ user, posts, onCreatePost, onDeletePost, socket, onViewProfile}) => { 
+const Feed = ({
+  user,
+  posts,
+  onCreatePost,
+  onDeletePost,
+  socket,
+  onViewProfile,
+  categories,
+}) => {
   const [selectedPost, setSelectedPost] = useState(null);
+  const [selectedCats, setSelectedCats] = useState([]); // empty = all
+  const [showFilters, setShowFilters] = useState(false);
+  const [showPills, setShowPills] = useState(false);
 
-  // Auto-scroll to top when selectedPost changes
   useEffect(() => {
     if (selectedPost) {
-      // Scroll to top smoothly
-      window.scrollTo({
-        top: 0,
-        behavior: 'smooth'
-      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }, [selectedPost]);
 
+  const toggleCat = (id) =>
+    setSelectedCats((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
+    );
+
+  const filtered =
+    selectedCats.length === 0
+      ? posts
+      : posts.filter((p) => selectedCats.includes(p.category_id));
+
   const handleViewOriginalPost = (postId) => {
-    // First try to find in current posts
-    const originalPost = posts.find(p => p.id === postId);
+    const originalPost = posts.find((p) => p.id === postId);
     if (originalPost) {
       setSelectedPost(originalPost);
     } else {
-      // If not found, create a placeholder with just the ID
       setSelectedPost({ id: postId, loading: true });
     }
   };
 
-  const handleBackToFeed = () => {
-    setSelectedPost(null);
-  };
+  const handleBackToFeed = () => setSelectedPost(null);
 
   if (selectedPost) {
-    // Show single post view
     return (
       <div className="single-post-view">
         <div className="post-view-header">
@@ -56,19 +65,45 @@ const Feed = ({ user, posts, onCreatePost, onDeletePost, socket, onViewProfile})
     );
   }
 
-  // Show regular feed
   return (
     <section className="feed">
       <header>
         <h3>Hello, {user?.name}!</h3>
       </header>
-      <CreatePostForm onCreatePost={onCreatePost} />
+      <CreatePostForm onCreatePost={onCreatePost} categories={categories} />
       <hr />
       <h4>Feed</h4>
 
+     {/* ---- GLASS POP PILLS ---- */}
+<button
+  className="cat-glass-trigger"
+  onMouseEnter={() => setShowPills(true)}
+  onClick={() => setShowPills((v) => !v)} 
+>
+  Categories
+</button>
+
+<div className="glass-pills-list">
+  {categories?.length > 0 &&
+    categories.map((c, i) => (
+      <label
+        key={c.id}
+        className={`glass-pill ${showPills ? "pop" : ""}`}
+        style={{ transitionDelay: `${i * 60}ms` }} // stagger
+      >
+        <input
+          type="checkbox"
+          checked={selectedCats.includes(c.id)}
+          onChange={() => toggleCat(c.id)}
+        />
+        <span>{c.name}</span>
+      </label>
+    ))}
+</div>
+
       <div className="posts-grid">
-        {posts.length > 0 ? (
-          posts.map((post) => (
+        {filtered.length ? (
+          filtered.map((post) => (
             <Post
               key={post.id}
               post={post}
@@ -76,11 +111,11 @@ const Feed = ({ user, posts, onCreatePost, onDeletePost, socket, onViewProfile})
               onDeletePost={onDeletePost}
               onViewProfile={onViewProfile}
               onViewOriginalPost={handleViewOriginalPost}
-              socket={socket} 
+              socket={socket}
             />
           ))
         ) : (
-          <p>No posts yet. Be the first!</p>
+          <p>No posts match the selected categories.</p>
         )}
       </div>
     </section>

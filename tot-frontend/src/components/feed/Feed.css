@@ -439,6 +439,234 @@
   padding: 20px;
 }
 
+
+.category-picker select,
+.filter-bar {
+  margin: 8px 0 16px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.filter-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.cat-badge {
+  margin-left: auto;
+  background: #ac34a8;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+}
+
+/* ===== MODERN CATEGORY FILTER PILLS ===== */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 1rem 0;
+  font-family: system-ui, sans-serif;
+}
+
+.filter-label {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+
+/* hide native checkbox */
+.filter-label input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+/* ---- the visible pill ---- */
+.filter-label span {
+  display: inline-block;
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  background: #f1f3f5;
+  color: #495057;
+  border: 1.5px solid transparent;
+
+  /* smooth transitions for every visual change */
+  transition: background 0.25s ease,
+              color 0.25s ease,
+              border-color 0.25s ease,
+              box-shadow 0.25s ease,
+              transform 0.2s ease;
+}
+
+/* hover state */
+.filter-label:hover span {
+  background: #e9ecef;
+  transform: translateY(-1px); /* subtle lift */
+}
+
+/* checked state */
+.filter-label input:checked + span {
+  background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+  color: #fff;
+  border-color: #6c5ce7;
+  box-shadow: 0 4px 12px rgba(108, 92, 231, 0.25);
+}
+
+/* "All" button special colour (optional) */
+.filter-label:first-child input:checked + span {
+  background: linear-gradient(135deg, #00b894, #00cec9);
+  border-color: #00b894;
+  box-shadow: 0 4px 12px rgba(0, 184, 148, 0.25);
+}
+
+/* active (click) state – tiny pop */
+.filter-label span:active {
+  transform: scale(0.96);
+  transition-duration: 0.3s; /* snappier press */
+}
+
+/* ---- TRIGGER BUTTON ---- */
+.cat-trigger-btn {
+  padding: 0.5rem 1.1rem;
+  border: 1.5px solid #dee2e6;
+  border-radius: 999px;
+  background: #7d64b7;
+  font-weight: 500; 
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.cat-trigger-btn:hover {
+  border-color: #6c5ce7;
+  box-shadow: 0 2px 8px rgba(108, 92, 231, 0.18);
+}
+
+/* ---- WRAPPER (keeps flow) ---- */
+.cat-trigger-wrapper {
+  position: relative;
+  display: inline-block; /* shrink-to-fit */
+  margin: 1rem 0;
+}
+
+/* ---- PILLS CONTAINER ---- */
+.filter-pills {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  opacity: 0;
+  transform: translateY(-10px);
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  z-index: 10;
+}
+
+/* ---- SHOW STATE ---- */
+.filter-pills.show {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* ---------- TRIGGER ---------- */
+.cat-glass-trigger {
+  padding: 0.5rem 1.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-weight: 500;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: background 0.25s ease;
+}
+.cat-glass-trigger:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* ---------- POP PILLS WRAPPER ---------- */
+.glass-pills-list {
+  position: relative;
+  margin-top: 0.8rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  perspective: 600px; /* for 3-d flip */
+}
+
+/* ---------- SINGLE GLASS PILL ---------- */
+.glass-pill {
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(20px) rotateX(-25deg);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.glass-pill.pop {
+  opacity: 1;
+  transform: translateY(0) rotateX(0);
+}
+
+/* hide native checkbox */
+.glass-pill input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+/* visible glassy span */
+.glass-pill span {
+  display: block;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  transition: background 0.25s ease, color 0.25s ease, border 0.25s ease,
+              box-shadow 0.25s ease, transform 0.2s ease;
+}
+
+/* hover lift */
+.glass-pill:hover span {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+}
+
+/* checked state – vibrant accent */
+.glass-pill input:checked + span {
+  background: rgba(255, 255, 255, 0.9);
+  color: #6c5ce7;
+  border-color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 6px 24px rgba(108, 92, 231, 0.35);
+}
+
+/* subtle press */
+.glass-pill span:active {
+  transform: scale(0.96);
+}
+
+
 /* Mobile Responsive */
 @media (max-width: 768px) {
   .feed {

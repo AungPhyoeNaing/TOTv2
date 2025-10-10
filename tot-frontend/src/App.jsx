@@ -21,6 +21,7 @@ import "./App.css";
 export default function App() {
   const [user, setUser] = useState(null);
   const [posts, setPosts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [usersList, setUsersList] = useState([]);
   // Initialize loading to true
   const [loading, setLoading] = useState(true);
@@ -491,13 +492,15 @@ export default function App() {
 
     const fetchData = async () => {
       try {
-        const [postsRes, usersRes] = await Promise.all([
+        const [postsRes, usersRes, catRes] = await Promise.all([
           apiClient.get("/posts"),
-          apiClient.get("/users")
+          apiClient.get("/users"),
+          apiClient.get("/categories"),
         ]);
 
         setPosts(postsRes.data);
         setUsersList(Array.isArray(usersRes.data) ? usersRes.data : []);
+        setCategories(catRes.data.data ?? catRes.data);
       } catch (err) {
         setError("Failed to load data. Please refresh.");
         console.error("Data fetch error:", err);
@@ -568,6 +571,7 @@ export default function App() {
               <Feed
                 user={user}
                 posts={posts}
+                categories={categories}
                 onCreatePost={handleCreatePost} // This was likely the missing function
                 onDeletePost={handleDeletePost}
                 socket={socket}
