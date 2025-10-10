@@ -20,10 +20,10 @@ class DatabaseSeeder extends Seeder
         // ]);
         
         $this->call([
-             UserSeeder::class,
-             
-            FollowSeeder::class,
-             PostSeeder::class,
+             UserSeeder::class,      // Users first (if posts depend on users existing, though factory handles this)
+             FollowSeeder::class,    // Follows next (if relevant)
+             CategorySeeder::class,  // Categories BEFORE PostSeeder
+             PostSeeder::class,      // PostSeeder runs after categories exist
         ]);
     }
 }

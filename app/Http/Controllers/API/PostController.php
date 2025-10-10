@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Post;
+use App\Models\Category; // Import the Category model
 use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 
@@ -13,18 +14,39 @@ class PostController extends Controller
     /**
      * Display a listing of the resource.
      * Modified to include counts for reactions, comments, and shares,
-     * and data for shared posts.
+     * data for shared posts, and category filtering.
      */
-    public function index()
+    public function index(Request $request) // Add Request parameter
     {
         $userId = Auth::id();
 
+        // Build the query, including relationships and counts
         $postsQuery = Post::with([
                 'user:id,name,email,avatar',
-                'sharedPost.user:id,name,email,avatar'
+                'sharedPost.user:id,name,email,avatar',
+                'category:id,name' // Eager load the category relationship
             ])
             ->withCount(['reactions', 'comments', 'shares'])
             ->latest();
+
+        // Apply category filter if provided
+        $categoryNames = $request->input('category_names'); // Expecting an array like ['News', 'Memes']
+        $categoryIds = $request->input('category_ids');     // Or an array of IDs like [1, 2]
+
+        if ($categoryNames && is_array($categoryNames) && !empty($categoryNames)) {
+            // Find category IDs based on names
+            $validCategoryIds = Category::whereIn('name', $categoryNames)->pluck('id')->toArray();
+            $postsQuery->whereIn('category_id', $validCategoryIds);
+        } elseif ($categoryIds && is_array($categoryIds) && !empty($categoryIds)) {
+            // Validate that category IDs exist (optional but recommended)
+            $validCategoryIds = Category::whereIn('id', $categoryIds)->pluck('id')->toArray();
+            // Note: If $validCategoryIds count differs from $categoryIds count, some IDs were invalid.
+            // You might want to handle this case (e.g., return an error, log it).
+            $postsQuery->whereIn('category_id', $validCategoryIds);
+        }
+        // If neither 'category_names' nor 'category_ids' are provided, or if 'all' is implicitly selected,
+        // the query will return posts from all categories (or no specific category filter is applied here).
+        // You might want logic to explicitly handle an 'All' selection if it comes from the frontend as a specific value.
 
         $posts = $postsQuery->get();
 
@@ -54,18 +76,38 @@ class PostController extends Controller
         }
         // --- End efficient fetch and append ---
 
+        // Optionally, append the category name directly to the post object for easier frontend access
+        // This is redundant if 'category' relationship is eager-loaded, but useful if you only need the name.
+        // $posts->each(function ($post) {
+        //     $post->category_name = $post->category ? $post->category->name : 'Uncategorized';
+        // });
+
         return response()->json($posts);
     }
 
     /**
      * Get posts for a specific user.
+     * Potentially add category filtering here too if needed for user-specific feeds.
      */
-    public function getUserPosts(User $user)
+    public function getUserPosts(User $user, Request $request) // Add Request parameter
     {
-        $posts = Post::where('user_id', $user->id)
-            ->with('user', 'sharedPost.user')
-            ->orderBy('created_at', 'desc')
-            ->get()
+        $postsQuery = Post::where('user_id', $user->id)
+            ->with('user', 'sharedPost.user', 'category:id,name') // Include category
+            ->orderBy('created_at', 'desc');
+
+        // Apply category filter for user's posts if provided
+        $categoryNames = $request->input('category_names');
+        $categoryIds = $request->input('category_ids');
+
+        if ($categoryNames && is_array($categoryNames) && !empty($categoryNames)) {
+            $validCategoryIds = Category::whereIn('name', $categoryNames)->pluck('id')->toArray();
+            $postsQuery->whereIn('category_id', $validCategoryIds);
+        } elseif ($categoryIds && is_array($categoryIds) && !empty($categoryIds)) {
+            $validCategoryIds = Category::whereIn('id', $categoryIds)->pluck('id')->toArray();
+            $postsQuery->whereIn('category_id', $validCategoryIds);
+        }
+
+        $posts = $postsQuery->get()
             ->map(function ($post) {
                 // Attach reaction counts
                 $post->likes_count = $post->reactions->where('type', 'like')->count();
@@ -82,6 +124,7 @@ class PostController extends Controller
                 }
 
                 // ✅ media_url and media_type are DB columns → auto-included in JSON
+                // Category data is included via 'with' above
                 return $post;
             });
 
@@ -92,6 +135,7 @@ class PostController extends Controller
      * Store a newly created resource in storage.
      * Supports optional media_url and media_type.
      * Requires at least body or media.
+     * Now also supports category_id.
      */
     public function store(Request $request)
     {
@@ -99,6 +143,7 @@ class PostController extends Controller
             'body' => 'nullable|string|max:1000',
             'media_url' => 'nullable|url|max:500',
             'media_type' => 'nullable|in:image,audio,video',
+            'category_id' => 'nullable|exists:categories,id', // Validate category_id exists in categories table
         ]);
 
         // Ensure at least body or media is provided
@@ -112,10 +157,11 @@ class PostController extends Controller
             'body' => $validated['body'] ?? null,
             'media_url' => $validated['media_url'] ?? null,
             'media_type' => $validated['media_type'] ?? null,
+            'category_id' => $validated['category_id'] ?? null, // Assign category if provided
         ]);
 
-        // Load user for consistent response
-        $post->load('user');
+        // Load user and category for consistent response
+        $post->load('user', 'category');
 
         // Initialize counts for immediate UI consistency (like in index)
         $post->likes_count = 0;
@@ -145,17 +191,20 @@ class PostController extends Controller
     /**
      * Share a post.
      * Creates a new post referencing the original.
+     * The shared post will inherit the category of the original post.
      */
     public function share(Post $post)
     {
         $sharedPostEntry = Auth::user()->posts()->create([
             'body' => '',
             'shared_post_id' => $post->id,
+            'category_id' => $post->category_id, // Inherit the category from the original post being shared
         ]);
 
         $sharedPostEntry->load([
             'user:id,name,email,avatar',
-            'sharedPost.user:id,name,email,avatar'
+            'sharedPost.user:id,name,email,avatar',
+            'category:id,name' // Load the inherited category
         ]);
 
         // Initialize counts for shared post entry
