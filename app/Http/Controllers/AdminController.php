@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\UserReport; // Import the UserReport model
 use App\Models\User; // Import the User model
 use App\Models\Post; // Import the Post model
+use App\Models\PasswordResetRequest; // Import the PasswordResetRequest model
 
 class AdminController extends Controller
 {
@@ -83,7 +84,10 @@ class AdminController extends Controller
                      ->orderBy('created_at', 'desc')
                      ->get();
 
-        return view('admin_panel', compact('reports', 'users', 'posts')); // Pass reports, users, and posts to the view
+        // Fetch password reset requests
+        $passwordRequests = PasswordResetRequest::orderBy('created_at', 'desc')->get(); // Order by newest first
+
+        return view('admin_panel', compact('reports', 'users', 'posts', 'passwordRequests')); // Pass reports, users, posts, and passwordRequests to the view
     }
 
     /**
@@ -96,15 +100,22 @@ class AdminController extends Controller
     }
 
     // Optional: Method to mark a report as reviewed
-    public function markReportReviewed($id)
+    public function markReportReviewed(Request $request, $id) // Add Request $request parameter
     {
+        // Check if admin is logged in using session
         if (!session('admin_logged_in')) {
-            return redirect()->route('admin.login')->withErrors(['error' => 'Please log in first.']);
+            // Return JSON error for AJAX
+            return response()->json(['error' => 'Please log in first.'], 401);
         }
 
-        $report = UserReport::with(['reportingUser:id,name,email', 'reportedUser:id,name,email'])->findOrFail($id); // Ensure related data is loaded if needed in this method
+        // Find the report by ID, fail if not found
+        $report = UserReport::findOrFail($id); // No need for with() here if just updating status
+
+        // Update the report's status
         $report->update(['status' => 'reviewed']);
-        return back()->with('message', 'Report marked as reviewed.');
+
+        // Return JSON success response for AJAX
+        return response()->json(['message' => 'Report marked as reviewed successfully.', 'report_id' => $id], 200);
     }
 
     /**
@@ -144,4 +155,57 @@ class AdminController extends Controller
         // Redirect back to the admin panel with a success message
         return redirect()->route('admin.panel')->with('message', "Post (ID: {$post->id}) deleted successfully.");
     }
+
+    /**
+     * Approve a password reset request.
+     */
+    public function approvePasswordReset($id)
+{
+    if (!session('admin_logged_in')) {
+        return redirect()->route('admin.login')->withErrors(['error' => 'Please log in first.']);
+    }
+
+    $request = PasswordResetRequest::findOrFail($id);
+    if ($request->status !== 'pending') {
+        return back()->withErrors(['error' => 'Request is not pending.']);
+    }
+
+    $request->update([
+        'status' => 'approved',
+        'admin_id' => session('admin_id'), // This now stores the string 'tot-admin-XX'
+        'processed_at' => now(),
+    ]);
+
+    // Optionally, send an email to the user's recovery email here
+    // Example: Mail::to($request->recovery_email)->send(new PasswordResetApprovedMail($request));
+
+    return redirect()->route('admin.panel')->with('message', 'Password reset request approved.');
+}
+
+/**
+ * Reject a password reset request.
+ */
+public function rejectPasswordReset($id)
+{
+    if (!session('admin_logged_in')) {
+        return redirect()->route('admin.login')->withErrors(['error' => 'Please log in first.']);
+    }
+
+    $request = PasswordResetRequest::findOrFail($id);
+    if ($request->status !== 'pending') {
+        return back()->withErrors(['error' => 'Request is not pending.']);
+    }
+
+    $request->update([
+        'status' => 'rejected',
+        'admin_id' => session('admin_id'), // This now stores the string 'tot-admin-XX'
+        'processed_at' => now(),
+    ]);
+
+    // Optionally, send an email to the user's recovery email here
+    // Example: Mail::to($request->recovery_email)->send(new PasswordResetRejectedMail($request));
+
+    return redirect()->route('admin.panel')->with('message', 'Password reset request rejected.');
+}
+
 }

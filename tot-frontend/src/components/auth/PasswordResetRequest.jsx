@@ -28,8 +28,13 @@ export default function PasswordResetRequest({ onBackToLogin }) {
     setSuccessMessage(null);
 
     try {
+      // Log the data being sent
+      console.log("Submitting password reset request with data:", formData);
+      
       // Call the new API endpoint
-      await requestPasswordReset(formData);
+      const response = await requestPasswordReset(formData);
+      console.log("Password reset request submitted successfully:", response); // Log successful response
+      
       setSuccessMessage("Your password reset request has been submitted successfully. An admin will process it soon.");
       // Optionally reset the form
       setFormData({
@@ -39,11 +44,35 @@ export default function PasswordResetRequest({ onBackToLogin }) {
         message: "",
       });
     } catch (err) {
-      console.error("Error submitting request:", err);
-      const errorMsg = err.response?.data?.message
-        ? err.response.data.message
-        : "An error occurred while submitting your request. Please try again.";
-      setError(errorMsg);
+      // Detailed error logging
+      console.error("Error submitting password reset request:", err);
+      
+      if (err.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        console.error("Response Error:", {
+          status: err.response.status,
+          statusText: err.response.statusText,
+          headers: err.response.headers,
+          data: err.response.data,
+        });
+        
+        // Try to get the error message from the response body
+        const errorMsg = err.response.data?.message 
+                         ? err.response.data.message 
+                         : `Server Error: ${err.response.status} - ${err.response.statusText}`;
+        setError(errorMsg);
+        
+      } else if (err.request) {
+        // The request was made but no response was received
+        console.error("Request Error (No Response):", err.request);
+        setError("Network error. Please check your connection and try again.");
+        
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        console.error("General Error:", err.message);
+        setError("An unexpected error occurred. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -58,38 +87,62 @@ export default function PasswordResetRequest({ onBackToLogin }) {
       {successMessage && <div className="success-message">{successMessage}</div>}
 
       <form onSubmit={handleSubmit}>
-        <input
-          type="email"
-          name="email"
-          placeholder="@tot.com Email Address"
-          value={formData.email}
-          onChange={handleChange}
-          required
-          pattern=".*@tot\.com$" // Basic pattern to enforce @tot.com domain
-          title="Please enter a valid @tot.com email address"
-        />
-        <input
-          type="email"
-          name="recovery_email"
-          placeholder="Recovery Email (e.g., yourname@gmail.com)"
-          value={formData.recovery_email}
-          onChange={handleChange}
-          required
-        />
-        <input
-          type="text"
-          name="account_creation_date"
-          placeholder="Approximate Account Creation Date (e.g., Jan 2024)"
-          value={formData.account_creation_date}
-          onChange={handleChange}
-        />
-        <textarea
-          name="message"
-          placeholder="Additional details or reason for reset (optional)"
-          rows="4"
-          value={formData.message}
-          onChange={handleChange}
-        ></textarea>
+        {/* Email Input */}
+        <div className="input-group"> {/* Optional: Wrap for styling */}
+          <label htmlFor="email" className="sr-only"> @tot.com Email Address </label>
+          <input
+            id="email"
+            type="email"
+            name="email"
+            placeholder="@tot.com Email Address"
+            value={formData.email}
+            onChange={handleChange}
+            required
+            pattern=".*@tot\.com$" // Basic pattern to enforce @tot.com domain
+            title="Please enter a valid @tot.com email address"
+          />
+        </div>
+
+        {/* Recovery Email Input */}
+        <div className="input-group">
+          <label htmlFor="recovery_email" className="sr-only"> Recovery Email </label>
+          <input
+            id="recovery_email"
+            type="email"
+            name="recovery_email"
+            placeholder="Recovery Email (e.g., yourname@gmail.com)"
+            value={formData.recovery_email}
+            onChange={handleChange}
+            required
+          />
+        </div>
+
+        {/* Account Creation Date Input */}
+        <div className="input-group">
+          <label htmlFor="account_creation_date" className="sr-only"> Account Creation Date </label>
+          <input
+            id="account_creation_date"
+            type="text"
+            name="account_creation_date"
+            placeholder="Approximate Account Creation Date (e.g., Jan 2024)"
+            value={formData.account_creation_date}
+            onChange={handleChange}
+          />
+        </div>
+
+        {/* Message Textarea */}
+        <div className="input-group">
+          <label htmlFor="message" className="sr-only"> Additional Details </label>
+          <textarea
+            id="message"
+            name="message"
+            placeholder="Additional details or reason for reset (optional)"
+            rows="4"
+            value={formData.message}
+            onChange={handleChange}
+          ></textarea>
+        </div>
+
         <button type="submit" disabled={loading}>
           {loading ? "Submitting..." : "Submit Request"}
         </button>

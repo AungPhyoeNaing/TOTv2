@@ -75,4 +75,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/messages/{userId}', [MessageController::class, 'index']); // Get chat history with a user
 
      Route::post('/submit-user-report', [UserReportController::class, 'submitReport']);
-});
+
+
+    //admin
+
+    
+    });
+
+    Route::post('/submit-password-reset-request', [AuthController::class, 'submitPasswordResetRequest']);

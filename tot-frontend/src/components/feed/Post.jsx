@@ -21,6 +21,31 @@ const ReactionButton = ({ type, count, isActive, onClick, disabled, ariaLabel })
 );
 // --- End ReactionButton ---
 
+
+const formatTimeAgo = (timestamp) => {
+  const now = new Date();
+  const postTime = new Date(timestamp);
+  const diffInSeconds = Math.floor((now - postTime) / 1000);
+
+  const intervals = {
+    year: 31536000,
+    month: 2592000,
+    day: 86400,
+    hour: 3600,
+    minute: 60,
+  };
+
+  for (const [unit, seconds] of Object.entries(intervals)) {
+    const value = Math.floor(diffInSeconds / seconds);
+    if (value >= 1) {
+      return `${value} ${unit}${value > 1 ? 's' : ''} ago`;
+    }
+  }
+
+  return 'Just now';
+};
+
+
 // Accept the socket prop
 const Post = ({ post, currentUser, onDeletePost, socket, onViewProfile, onViewOriginalPost }) => { // <-- Added onViewOriginalPost prop
   // --- State initialization ---
@@ -250,9 +275,12 @@ const Post = ({ post, currentUser, onDeletePost, socket, onViewProfile, onViewOr
             alt={`${post.user?.name || 'User'}'s avatar`}
             className="post-author-avatar"
           />
+          
           <div>
             <strong>{post.user?.name || 'Unknown User'}</strong>
-            
+            <div className="post-time">
+  {formatTimeAgo(post.created_at)}
+</div>
             {post.shared_post_id && (
               <span className="shared-indicator">
                 <span> shared </span>

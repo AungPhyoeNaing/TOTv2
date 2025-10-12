@@ -2,7 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminController;
-
+use App\Http\Controllers\EmailTestController;
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -18,18 +18,38 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-
-// Admin routes
+// Admin Authentication routes (These don't require the 'admin' middleware)
 Route::get('/admin/login', [AdminController::class, 'showLoginForm'])->name('admin.login');
 Route::post('/admin/login', [AdminController::class, 'login'])->name('admin.login.post');
-Route::get('/admin/panel', [AdminController::class, 'showPanel'])->name('admin.panel')->middleware('admin'); // Optional: Add middleware
-Route::get('/admin/logout', [AdminController::class, 'logout'])->name('admin.logout')->middleware('admin'); // Optional: Add middleware
+
+// Admin Panel and related actions (These require the 'admin' middleware)
+Route::middleware(['admin'])->group(function () {
+    // Main Admin Panel
+    Route::get('/admin/panel', [AdminController::class, 'showPanel'])->name('admin.panel');
+    // Optional: You might also map the root /admin to the panel
+    // Route::get('/admin', [AdminController::class, 'showPanel'])->name('admin.dashboard'); // If you prefer 'dashboard' name
+
+    // Logout
+    Route::post('/admin/logout', [AdminController::class, 'logout'])->name('admin.logout');
+    // Or if using GET for logout (less secure but simpler for session clearing in this context):
+    // Route::get('/admin/logout', [AdminController::class, 'logout'])->name('admin.logout');
+
+    // Managing Users and Posts
+    Route::delete('/admin/users/{id}', [AdminController::class, 'deleteUser'])->name('admin.delete-user');
+    Route::delete('/admin/posts/{id}', [AdminController::class, 'deletePost'])->name('admin.delete-post');
+
+    // Managing Reports
+    Route::post('/admin/reports/{id}/review', [AdminController::class, 'markReportReviewed'])->name('admin.mark-report-reviewed');
+    // Managing Password Reset Requests
+    Route::post('/admin/password-reset/{id}/approve', [AdminController::class, 'approvePasswordReset'])->name('admin.approve-password-reset');
+    Route::post('/admin/password-reset/{id}/reject', [AdminController::class, 'rejectPasswordReset'])->name('admin.reject-password-reset');
+});
 
 
-// Routes for managing users and posts (within admin panel)
-Route::delete('/admin/users/{id}', [AdminController::class, 'deleteUser'])->name('admin.delete-user')->middleware('admin');
-Route::delete('/admin/posts/{id}', [AdminController::class, 'deletePost'])->name('admin.delete-post')->middleware('admin');
+Route::get('/test-email', function () {
+    return view('test-email');
+})->name('test.email.form');
 
-
-// Optional: Route for marking reports reviewed
-Route::patch('/admin/reports/{id}/review', [AdminController::class, 'markReportReviewed'])->name('admin.mark-report-reviewed')->middleware('admin');
+// Route to process the test request
+Route::post('/test-email', [EmailTestController::class, 'sendTestEmail'])
+    ->name('test.email.send');

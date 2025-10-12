@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com  "></script>
     <script>
         // Toggle sidebar visibility on smaller screens
         function toggleSidebar() {
@@ -57,6 +57,367 @@
                  }
             }
         });
+
+        // --- AJAX Functionality for Admin Actions ---
+        // Function to handle approve/reject actions for Password Requests
+async function handlePasswordRequestAction(requestId, action) {
+    // Show a simple loading state or disable buttons temporarily
+    const approveButton = document.querySelector(`#action-buttons-${requestId} button:first-child`);
+    const rejectButton = document.querySelector(`#action-buttons-${requestId} button:last-child`);
+    if (approveButton) approveButton.disabled = true;
+    if (rejectButton) rejectButton.disabled = true;
+    const statusSpan = document.getElementById(`status-span-${requestId}`);
+    if (statusSpan) statusSpan.textContent = `Processing...`;
+
+    // Determine the correct route based on the action
+    let route;
+    if (action === 'approve') {
+        route = `{{ route("admin.approve-password-reset", ":id") }}`.replace(':id', requestId);
+    } else if (action === 'reject') {
+        route = `{{ route("admin.reject-password-reset", ":id") }}`.replace(':id', requestId);
+    } else {
+        console.error('Invalid action:', action);
+        // Re-enable buttons on error
+        if (approveButton) approveButton.disabled = false;
+        if (rejectButton) rejectButton.disabled = false;
+        if (statusSpan) statusSpan.textContent = 'Error';
+        return;
+    }
+
+    // Prepare the request (using fetch API)
+    const formData = new FormData();
+    formData.append('_token', '{{ csrf_token() }}'); // Include CSRF token
+
+    try {
+        const response = await fetch(route, {
+            method: 'POST', // Use POST as defined in your routes
+            body: formData,
+            headers: {
+                'Accept': 'application/json', // Expect JSON response
+            },
+        });
+
+        if (response.ok) {
+            // Attempt to parse JSON response only if status is OK
+            let data;
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                data = await response.json();
+                console.log('Password request action successful:', data);
+            } else {
+                console.warn('Response OK but not JSON, got content-type:', contentType);
+                // If the server redirects after success (e.g., to the panel), you might need to reload the tab content or redirect the page
+                // For now, assume success based on status code and update UI accordingly
+                data = { message: `${action.charAt(0).toUpperCase() + action.slice(1)}d successfully.` }; // Fallback message
+            }
+
+            // Update the UI based on the response (or fallback)
+            if (statusSpan) {
+                statusSpan.textContent = action === 'approve' ? 'Approved' : 'Rejected';
+                statusSpan.className = action === 'approve' ? 'ml-1 px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800' : 'ml-1 px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800';
+            }
+
+            // Hide the action buttons container
+            const actionButtonsContainer = document.getElementById(`action-buttons-${requestId}`);
+            if (actionButtonsContainer) {
+                actionButtonsContainer.style.display = 'none'; // Hide the buttons
+            }
+
+            // Optionally, add the processed info paragraph if it doesn't exist yet
+            const processedInfoId = `processed-info-${requestId}`;
+            if (!document.getElementById(processedInfoId)) {
+                const cardBody = document.querySelector(`#request-card-${requestId} .mt-4.space-y-2`);
+                if (cardBody) {
+                    // Get the current admin ID from the session display (or pass via Blade if needed)
+                    const adminId = document.querySelector('.hidden.sm\\:flex.sm\\:flex-col.sm\\:items-end .text-indigo-600').textContent;
+                    const nowFormatted = new Date().toLocaleString(); // Simple client-side timestamp, server timestamp is better
+                    const processedInfoHtml = `<p class="text-sm text-gray-600 mt-2" id="${processedInfoId}">
+                                                <span class="font-medium">Processed by:</span> ${adminId} (Just now)
+                                              </p>`;
+                    cardBody.insertAdjacentHTML('beforeend', processedInfoHtml);
+                }
+            }
+
+        } else {
+            // Handle server errors (e.g., 4xx, 5xx) or redirects
+            let errorData;
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                // If it's JSON, parse it
+                errorData = await response.json();
+                console.error('Server error (JSON):', response.status, errorData);
+                alert(`Failed to ${action} request: ${response.status} - ${errorData.message || 'Unknown error'}`); // Or display in a more user-friendly way
+            } else {
+                // If it's not JSON (likely HTML), get the text
+                errorData = await response.text();
+                console.error('Server error (HTML/Text):', response.status, errorData);
+                // Check for common redirect indicators or error pages in the HTML
+                if (errorData.includes('login') || errorData.includes('Login')) {
+                     alert(`Authentication failed. Please log in again.`);
+                     // Optionally redirect to login page
+                     // window.location.href = '{{ route("admin.login") }}';
+                } else if (response.status === 302 || response.status === 301) {
+                     alert(`Redirect received (${response.status}). Please check your session.`);
+                } else {
+                     alert(`Failed to ${action} request: ${response.status} - Server returned an error page.`);
+                }
+            }
+            // Re-enable buttons on error
+            if (approveButton) approveButton.disabled = false;
+            if (rejectButton) rejectButton.disabled = false;
+            if (statusSpan) statusSpan.textContent = 'Error';
+        }
+    } catch (error) {
+        // Handle network errors or other exceptions during fetch
+        console.error('Network error:', error);
+        alert(`Network error: ${error.message}`); // Or display in a more user-friendly way
+        // Re-enable buttons on error
+        if (approveButton) approveButton.disabled = false;
+        if (rejectButton) rejectButton.disabled = false;
+        if (statusSpan) statusSpan.textContent = 'Error';
+    }
+}
+
+// Function to handle marking a report as reviewed
+async function handleMarkReportReviewed(reportId) {
+    // Show a simple loading state or disable button temporarily
+    const button = document.querySelector(`#mark-reviewed-btn-${reportId}`);
+    if (button) {
+        button.disabled = true;
+        button.textContent = 'Processing...';
+    }
+
+    const route = `{{ route("admin.mark-report-reviewed", ":id") }}`.replace(':id', reportId);
+    const formData = new FormData();
+    formData.append('_token', '{{ csrf_token() }}');
+    // formData.append('_method', 'PATCH'); // If your route expects PATCH, include this
+
+    try {
+        const response = await fetch(route, {
+            method: 'POST', // Use POST as defined in your routes (or PATCH if needed)
+            body: formData,
+            headers: {
+                'Accept': 'application/json',
+            },
+        });
+
+        if (response.ok) {
+            let data;
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                data = await response.json();
+                console.log('Mark report reviewed successful:', data);
+            } else {
+                console.warn('Response OK but not JSON, got content-type:', contentType);
+                data = { message: `Report marked as reviewed.` }; // Fallback message
+            }
+
+            // Update the UI based on the response
+            const statusSpan = document.getElementById(`report-status-${reportId}`);
+            if (statusSpan) {
+                statusSpan.textContent = 'Reviewed';
+                statusSpan.className = 'ml-1 px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800';
+            }
+
+            // Hide the button or change its text
+            if (button) {
+                button.style.display = 'none'; // Or button.textContent = 'Marked';
+            }
+
+        } else {
+            let errorData;
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                errorData = await response.json();
+                console.error('Server error (JSON):', response.status, errorData);
+                alert(`Failed to mark report as reviewed: ${response.status} - ${errorData.message || 'Unknown error'}`);
+            } else {
+                errorData = await response.text();
+                console.error('Server error (HTML/Text):', response.status, errorData);
+                 if (errorData.includes('login') || errorData.includes('Login')) {
+                     alert(`Authentication failed. Please log in again.`);
+                     // window.location.href = '{{ route("admin.login") }}';
+                } else if (response.status === 302 || response.status === 301) {
+                     alert(`Redirect received (${response.status}). Please check your session.`);
+                } else {
+                     alert(`Failed to mark report as reviewed: ${response.status} - Server returned an error page.`);
+                }
+            }
+            if (button) {
+                button.disabled = false;
+                button.textContent = 'Mark as Reviewed'; // Revert button text
+            }
+        }
+    } catch (error) {
+        console.error('Network error:', error);
+        alert(`Network error: ${error.message}`);
+        if (button) {
+            button.disabled = false;
+            button.textContent = 'Mark as Reviewed'; // Revert button text
+        }
+    }
+}
+
+// Function to handle deleting a user
+async function handleDeleteUser(userId, userName) {
+    // Show confirmation dialog first
+    if (!confirm(`Are you sure you want to delete user ${userName} (ID: ${userId})? This action cannot be undone.`)) {
+        return; // Exit if user cancels
+    }
+
+    // Show a simple loading state or disable button temporarily
+    const button = document.querySelector(`#delete-user-btn-${userId}`);
+    if (button) {
+        button.disabled = true;
+        button.textContent = 'Deleting...';
+    }
+
+    const route = `{{ route("admin.delete-user", ":id") }}`.replace(':id', userId);
+    const formData = new FormData();
+    formData.append('_token', '{{ csrf_token() }}');
+    formData.append('_method', 'DELETE'); // Laravel expects _method for DELETE via form/POST
+
+    try {
+        const response = await fetch(route, {
+            method: 'POST', // Use POST to send _method=DELETE
+            body: formData,
+            headers: {
+                'Accept': 'application/json',
+            },
+        });
+
+        if (response.ok) {
+            let data;
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                data = await response.json();
+                console.log('Delete user successful:', data);
+            } else {
+                console.warn('Response OK but not JSON, got content-type:', contentType);
+                data = { message: `User deleted.` }; // Fallback message
+            }
+
+            // Update the UI based on the response - Remove the table row
+            const row = document.getElementById(`user-row-${userId}`);
+            if (row) {
+                row.remove();
+                console.log(`User row ${userId} removed from table.`);
+            }
+
+        } else {
+            let errorData;
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                errorData = await response.json();
+                console.error('Server error (JSON):', response.status, errorData);
+                alert(`Failed to delete user: ${response.status} - ${errorData.message || 'Unknown error'}`);
+            } else {
+                errorData = await response.text();
+                console.error('Server error (HTML/Text):', response.status, errorData);
+                 if (errorData.includes('login') || errorData.includes('Login')) {
+                     alert(`Authentication failed. Please log in again.`);
+                     // window.location.href = '{{ route("admin.login") }}';
+                } else if (response.status === 302 || response.status === 301) {
+                     alert(`Redirect received (${response.status}). Please check your session.`);
+                } else {
+                     alert(`Failed to delete user: ${response.status} - Server returned an error page.`);
+                }
+            }
+            if (button) {
+                button.disabled = false;
+                button.textContent = 'Delete'; // Revert button text
+            }
+        }
+    } catch (error) {
+        console.error('Network error:', error);
+        alert(`Network error: ${error.message}`);
+        if (button) {
+            button.disabled = false;
+            button.textContent = 'Delete'; // Revert button text
+        }
+    }
+}
+
+// Function to handle deleting a post
+async function handleDeletePost(postId) {
+    // Show confirmation dialog first
+    if (!confirm(`Are you sure you want to delete this post (ID: ${postId})? This action cannot be undone.`)) {
+        return; // Exit if user cancels
+    }
+
+    // Show a simple loading state or disable button temporarily
+    const button = document.querySelector(`#delete-post-btn-${postId}`);
+    if (button) {
+        button.disabled = true;
+        button.textContent = 'Deleting...';
+    }
+
+    const route = `{{ route("admin.delete-post", ":id") }}`.replace(':id', postId);
+    const formData = new FormData();
+    formData.append('_token', '{{ csrf_token() }}');
+    formData.append('_method', 'DELETE'); // Laravel expects _method for DELETE via form/POST
+
+    try {
+        const response = await fetch(route, {
+            method: 'POST', // Use POST to send _method=DELETE
+            body: formData,
+            headers: {
+                'Accept': 'application/json',
+            },
+        });
+
+        if (response.ok) {
+            let data;
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                data = await response.json();
+                console.log('Delete post successful:', data);
+            } else {
+                console.warn('Response OK but not JSON, got content-type:', contentType);
+                data = { message: `Post deleted.` }; // Fallback message
+            }
+
+            // Update the UI based on the response - Remove the table row
+            const row = document.getElementById(`post-row-${postId}`);
+            if (row) {
+                row.remove();
+                console.log(`Post row ${postId} removed from table.`);
+            }
+
+        } else {
+            let errorData;
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                errorData = await response.json();
+                console.error('Server error (JSON):', response.status, errorData);
+                alert(`Failed to delete post: ${response.status} - ${errorData.message || 'Unknown error'}`);
+            } else {
+                errorData = await response.text();
+                console.error('Server error (HTML/Text):', response.status, errorData);
+                 if (errorData.includes('login') || errorData.includes('Login')) {
+                     alert(`Authentication failed. Please log in again.`);
+                     // window.location.href = '{{ route("admin.login") }}';
+                } else if (response.status === 302 || response.status === 301) {
+                     alert(`Redirect received (${response.status}). Please check your session.`);
+                } else {
+                     alert(`Failed to delete post: ${response.status} - Server returned an error page.`);
+                }
+            }
+            if (button) {
+                button.disabled = false;
+                button.textContent = 'Delete'; // Revert button text
+            }
+        }
+    } catch (error) {
+        console.error('Network error:', error);
+        alert(`Network error: ${error.message}`);
+        if (button) {
+            button.disabled = false;
+            button.textContent = 'Delete'; // Revert button text
+        }
+    }
+}
+        
     </script>
     <style>
         /* Optional: Add subtle animations */
@@ -290,20 +651,18 @@
                                                     @if($report->status === 'pending') bg-yellow-100 text-yellow-800
                                                     @elseif($report->status === 'reviewed') bg-blue-100 text-blue-800
                                                     @elseif($report->status === 'action_taken') bg-red-100 text-red-800
-                                                    @else bg-gray-100 text-gray-800 @endif">
+                                                    @else bg-gray-100 text-gray-800 @endif"
+                                                    id="report-status-{{ $report->id }}"> <!-- Add ID for AJAX update -->
                                                     {{ ucfirst($report->status) }}
                                                 </span>
                                             </div>
-                                            <!-- Optional: Add a button to mark as reviewed -->
-                                            <!--
-                                            <form method="POST" action="{{ route('admin.mark-report-reviewed', $report->id) }}" class="mt-2 inline">
-                                                @csrf
-                                                @method('PATCH')
-                                                <button type="submit" class="text-xs bg-green-500 hover:bg-green-700 text-white py-1 px-2 rounded">
+                                            <!-- AJAX: Replace form with button -->
+                                            @if($report->status === 'pending')
+                                                <button type="button" class="text-xs bg-green-500 hover:bg-green-700 text-white py-1 px-2 rounded mt-2"
+                                                        id="mark-reviewed-btn-{{ $report->id }}" onclick="handleMarkReportReviewed({{ $report->id }})">
                                                     Mark as Reviewed
                                                 </button>
-                                            </form>
-                                            -->
+                                            @endif
                                         </div>
                                     </div>
                                 </div>
@@ -333,19 +692,17 @@
                                 </thead>
                                 <tbody class="divide-y divide-gray-200 bg-white">
                                     @foreach($users as $user)
-                                        <tr class="hover:bg-gray-50">
+                                        <tr class="hover:bg-gray-50" id="user-row-{{ $user->id }}"> <!-- Add ID for AJAX removal -->
                                             <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">{{ $user->id }}</td>
                                             <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{{ $user->name }}</td>
                                             <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{{ $user->email }}</td>
                                             <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{{ $user->recovery_email ?? 'N/A' }}</td>
                                             <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                                                <form method="POST" action="{{ route('admin.delete-user', $user->id) }}" class="inline" onsubmit="return confirm('Are you sure you want to delete user {{ $user->name }} (ID: {{ $user->id }})? This action cannot be undone.')">
-                                                    @csrf
-                                                    @method('DELETE')
-                                                    <button type="submit" class="text-red-600 hover:text-red-900">
-                                                        Delete<span class="sr-only"> for user {{ $user->id }}</span>
-                                                    </button>
-                                                </form>
+                                                <!-- AJAX: Replace form with button -->
+                                                <button type="button" class="text-red-600 hover:text-red-900"
+                                                        id="delete-user-btn-{{ $user->id }}" onclick="handleDeleteUser({{ $user->id }}, '{{ addslashes($user->name) }}')">
+                                                    Delete<span class="sr-only"> for user {{ $user->id }}</span>
+                                                </button>
                                             </td>
                                         </tr>
                                     @endforeach
@@ -383,7 +740,7 @@
                                 </thead>
                                 <tbody class="divide-y divide-gray-200 bg-white">
                                     @foreach($posts as $post)
-                                        <tr class="hover:bg-gray-50">
+                                        <tr class="hover:bg-gray-50" id="post-row-{{ $post->id }}"> <!-- Add ID for AJAX removal -->
                                             <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">{{ $post->id }}</td>
                                             <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{{ $post->user->name ?? 'Unknown' }}</td>
                                             <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{{ Str::limit($post->body, 50) }}</td>
@@ -410,13 +767,11 @@
                                             <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{{ $post->comments_count ?? 0 }}</td>
                                             <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{{ $post->created_at->format('Y-m-d H:i:s') }}</td>
                                             <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                                                <form method="POST" action="{{ route('admin.delete-post', $post->id) }}" class="inline" onsubmit="return confirm('Are you sure you want to delete this post (ID: {{ $post->id }})? This action cannot be undone.')">
-                                                    @csrf
-                                                    @method('DELETE')
-                                                    <button type="submit" class="text-red-600 hover:text-red-900">
-                                                        Delete<span class="sr-only"> for post {{ $post->id }}</span>
-                                                    </button>
-                                                </form>
+                                                <!-- AJAX: Replace form with button -->
+                                                <button type="button" class="text-red-600 hover:text-red-900"
+                                                        id="delete-post-btn-{{ $post->id }}" onclick="handleDeletePost({{ $post->id }})">
+                                                    Delete<span class="sr-only"> for post {{ $post->id }}</span>
+                                                </button>
                                             </td>
                                         </tr>
                                     @endforeach
@@ -429,8 +784,60 @@
                 <!-- Password Requests Tab -->
                 <div id="PasswordRequests" class="tab-content hidden">
                     <h2 class="text-2xl font-semibold text-gray-900 mb-4">Password Reset Requests</h2>
-                    <p class="text-gray-500">Content for password reset requests will be added here.</p>
-                    <!-- Future content will go here -->
+                    @if($passwordRequests->isEmpty())
+                        <p class="text-gray-500">No password reset requests found.</p>
+                    @else
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            @foreach($passwordRequests as $request)
+                                <div class="bg-white overflow-hidden shadow rounded-lg" id="request-card-{{ $request->id }}"> <!-- Add an ID to the card for easy targeting -->
+                                    <div class="px-4 py-5 sm:p-6">
+                                        <h3 class="text-lg font-medium text-gray-900">Request #{{ $request->id }}</h3>
+                                        <div class="mt-4 space-y-2">
+                                            <p class="text-sm text-gray-600"><span class="font-medium">@tot.com Email:</span> {{ $request->email }}</p>
+                                            <p class="text-sm text-gray-600"><span class="font-medium">Recovery Email:</span> {{ $request->recovery_email }}</p>
+                                            <p class="text-sm text-gray-600"><span class="font-medium">Account Creation Date:</span> {{ $request->account_creation_date ?: 'N/A' }}</p>
+                                            <p class="text-sm text-gray-600"><span class="font-medium">Message:</span> {{ $request->message ?: 'N/A' }}</p>
+                                            <p class="text-sm text-gray-600"><span class="font-medium">Submitted At:</span> {{ $request->created_at->format('Y-m-d H:i:s') }}</p>
+
+                                            <div>
+                                                <span class="font-medium">Status:</span>
+                                                <span class="ml-1 px-2 py-1 text-xs font-semibold rounded-full
+                                                    @if($request->status === 'pending') bg-yellow-100 text-yellow-800
+                                                    @elseif($request->status === 'approved') bg-green-100 text-green-800
+                                                    @elseif($request->status === 'rejected') bg-red-100 text-red-800
+                                                    @else bg-gray-100 text-gray-800 @endif"
+                                                    id="status-span-{{ $request->id }}"> <!-- Add an ID to the status span -->
+                                                    {{ ucfirst($request->status) }}
+                                                </span>
+                                            </div>
+
+                                            @if($request->status === 'pending')
+                                                <!-- Action buttons for pending requests -->
+                                                <div class="mt-4 flex space-x-2" id="action-buttons-{{ $request->id }}"> <!-- Add an ID to the action buttons container -->
+                                                    <!-- Remove the forms and use standalone buttons with onclick handlers -->
+                                                    <button type="button" class="text-xs bg-green-500 hover:bg-green-700 text-white py-1 px-2 rounded"
+                                                            onclick="handlePasswordRequestAction({{ $request->id }}, 'approve')">
+                                                        Approve
+                                                    </button>
+                                                    <button type="button" class="text-xs bg-red-500 hover:bg-red-700 text-white py-1 px-2 rounded"
+                                                            onclick="handlePasswordRequestAction({{ $request->id }}, 'reject')">
+                                                        Reject
+                                                    </button>
+                                                </div>
+                                            @else
+                                                <!-- Show who processed it and when, if processed -->
+                                                <p class="text-sm text-gray-600 mt-2" id="processed-info-{{ $request->id }}"> <!-- Add an ID to the processed info -->
+                                                    <span class="font-medium">Processed by:</span>
+                                                    {{ $request->admin ? $request->admin->name : $request->admin_id }}
+                                                    ({{ $request->processed_at ? $request->processed_at->format('Y-m-d H:i:s') : 'N/A' }})
+                                                </p>
+                                            @endif
+                                        </div>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
                 </div>
             </div>
         </main>

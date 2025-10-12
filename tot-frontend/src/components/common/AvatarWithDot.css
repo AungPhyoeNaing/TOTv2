@@ -1,0 +1,29 @@
+.avatar-dot-wrapper {
+  position: relative;
+  display: inline-block;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.avatar-img {
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.7);
+}
+
+.status-dot {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ced4da;
+  border: 2px solid #ffffff;
+  transition: background 0.2s ease;
+}
+
+.status-dot.on {
+  background: #00b894;
+  box-shadow: 0 0 0 2px #ffffff, 0 0 8px #00b894;
+}

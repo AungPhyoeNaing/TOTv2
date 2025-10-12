@@ -8,7 +8,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Validation\ValidationException;
-use Illuminate\Support\Facades\Auth; // Import Auth facade
+use Illuminate\Support\Facades\Auth; 
+use App\Models\PasswordResetRequest; 
 
 class AuthController extends Controller
 {
@@ -226,6 +227,40 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Profile updated successfully!',
             'user' => $user
+        ], 200);
+    }
+
+     public function submitPasswordResetRequest(Request $request)
+    {
+        // Validate the incoming request data
+        // Ensure the field names match exactly what is sent from the frontend (formData keys in PasswordResetRequest.jsx)
+        $request->validate([
+            'email' => [
+                'required',
+                'email',
+                'ends_with:@tot.com', // Ensure email ends with @tot.com
+            ],
+            'recovery_email' => 'required|email|max:255',
+            'account_creation_date' => 'nullable|string|max:255',
+            'message' => 'nullable|string|max:1000', // Adjust max length as needed
+        ], [
+            'email.ends_with' => 'Email must be a valid @tot.com address.',
+        ]);
+
+        // Create a new password reset request record
+        // The $request->all() will now contain the validated fields with the correct keys
+        $resetRequest = PasswordResetRequest::create([
+            'email' => $request->email, // Access using the validated key
+            'recovery_email' => $request->recovery_email, // Access using the validated key
+            'account_creation_date' => $request->account_creation_date, // Access using the validated key
+            'message' => $request->message, // Access using the validated key
+            // 'status' defaults to 'pending'
+            // 'admin_id' and 'processed_at' are null initially
+        ]);
+
+        // Return a success response
+        return response()->json([
+            'message' => 'Your password reset request has been submitted successfully. An admin will process it soon.',
         ], 200);
     }
 }
