@@ -1,4 +1,4 @@
-// src/App.jsx (Updated with category filtering state)
+// src/App.jsx (Updated with online status state and listeners)
 import React, { useState, useEffect } from "react";
 import io from "socket.io-client"; // <-- Import Socket.IO Client
 import apiClient from "./api/apiClient";
@@ -7,7 +7,7 @@ import Footer from "./components/layout/Footer.jsx";
 import Login from "./components/auth/Login.jsx";
 import Register from "./components/auth/Register.jsx";
 import Feed from "./components/feed/Feed.jsx";
-import UserList from "./components/profile/UserList.jsx";
+import UserList from "./components/profile/UserList.jsx"; // Make sure this is the updated UserList
 import ProfileView from "./components/profile/ProfileView.jsx";
 import Chat from "./components/chat/Chat.jsx";
 import EditProfile from "./components/profile/EditProfile.jsx"; // Import the new component
@@ -23,7 +23,10 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [posts, setPosts] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [usersList, setUsersList] = useState([]);
+  const [usersList, setUsersList] = useState([]); // This holds the full user list from API
+  // --- NEW STATE: For online users ---
+  const [onlineUsers, setOnlineUsers] = useState(new Set());
+  // --- END NEW STATE ---
   // Initialize loading to true
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -113,6 +116,9 @@ export default function App() {
       setUser(null);
       setPosts([]);
       setUsersList([]);
+      // --- Clear online users on logout ---
+      setOnlineUsers(new Set());
+      // --- End clear ---
       setCurrentView('feed');
       setExtraView(null); // Clear extra views
       setChatWithUser(null);
@@ -214,7 +220,7 @@ export default function App() {
   } catch (err) {
     setError("Failed to load profile");
     console.error("Profile error:", err);
-    setProfileUser({ id: userId, name: 'User' });
+    setProfileUser({ id: userId, name: 'User' | 'User' });
     // Ensure profileData has isMutualFollow even on error
     setProfileData(prevData => ({ ...prevData, isMutualFollow: false }));
   } finally {
@@ -377,6 +383,33 @@ export default function App() {
           console.log("[Socket] Connected to Socket.IO server for real-time updates");
         };
 
+        // --- NEW LISTENERS: For online/offline status ---
+        const handleOnlineList = (userIds) => {
+          console.log("[Socket] Initial online list received:", userIds);
+          if (isMounted) {
+            setOnlineUsers(new Set(userIds));
+          }
+        };
+
+        const handleUserOnline = ({ userId }) => {
+          console.log("[Socket] User came online:", userId);
+          if (isMounted) {
+            setOnlineUsers(prev => new Set(prev).add(userId));
+          }
+        };
+
+        const handleUserOffline = ({ userId }) => {
+          console.log("[Socket] User went offline:", userId);
+          if (isMounted) {
+            setOnlineUsers(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(userId);
+              return newSet;
+            });
+          }
+        };
+        // --- END NEW LISTENERS ---
+
         const handleReactionUpdated = (data) => {
           console.log("[Socket] Real-time reaction update received:", data);
           // Update the posts state with the new reaction counts and user reaction
@@ -440,6 +473,11 @@ export default function App() {
 
         // --- Attach the listeners to the new socket instance ---
         newSocketInstance.on("connect", handleConnect);
+        // --- NEW LISTENERS: Add the online status listeners ---
+        newSocketInstance.on("onlineList", handleOnlineList);
+        newSocketInstance.on("userOnline", handleUserOnline);
+        newSocketInstance.on("userOffline", handleUserOffline);
+        // --- END NEW LISTENERS ---
         newSocketInstance.on("reactionUpdated", handleReactionUpdated);
         newSocketInstance.on("commentAdded", handleCommentAdded);
         newSocketInstance.on("userJoined", handleUserJoined);
@@ -484,6 +522,11 @@ export default function App() {
         // These variables (handleConnect, handleReactionUpdated, etc.) are captured here
         // because they were defined in the same scope (the initializeApp function inside useEffect)
         newSocketInstance.off("connect", handleConnect);
+        // --- NEW LISTENERS: Remove the online status listeners ---
+        newSocketInstance.off("onlineList", handleOnlineList);
+        newSocketInstance.off("userOnline", handleUserOnline);
+        newSocketInstance.off("userOffline", handleUserOffline);
+        // --- END NEW LISTENERS ---
         newSocketInstance.off("reactionUpdated", handleReactionUpdated);
         newSocketInstance.off("commentAdded", handleCommentAdded);
         newSocketInstance.off("userJoined", handleUserJoined);
@@ -607,6 +650,7 @@ export default function App() {
                 // Pass selected categories to Feed for filtering
                 selectedCats={selectedCats}
               />
+              {/* Pass the onlineUsers state to UserList */}
               <UserList
                 users={usersList}
                 currentUser={user}
@@ -615,6 +659,9 @@ export default function App() {
                 onViewProfile={viewProfile}
                 onChat={initiateChat}
                 onReportUser={handleSwitchToReportUser} // Pass the handler to UserList component
+                // --- PASS THE NEW STATE ---
+                onlineUsers={onlineUsers}
+                // --- END PASS ---
               />
             </>
           ) : currentView === 'profile' ? (
@@ -643,6 +690,9 @@ export default function App() {
                 otherUserId={chatWithUser?.id}
                 otherUserName={chatWithUser?.name}
                 onViewProfile={viewProfile}
+                onlineUsers={onlineUsers}
+      isOtherUserOnline={onlineUsers?.has(chatWithUser.id)} 
+                
               />
             ) : (
               <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>

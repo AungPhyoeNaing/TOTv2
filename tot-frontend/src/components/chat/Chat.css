@@ -53,6 +53,10 @@
   font-weight: 600;
   color: var(--text-primary);
   letter-spacing: -0.02em;
+  /* Ensure flex layout for name and status */
+  display: flex;
+  align-items: center;
+  gap: 8px; /* Space between name/link and status */
 }
 
 .chat-header-info {
@@ -74,6 +78,38 @@
   font-size: 0.85rem;
   box-shadow: 0 2px 8px rgba(100, 108, 255, 0.3);
 }
+
+/* --- NEW STYLES: For Online Status in Chat Header --- */
+.online-status-chat {
+  display: flex;
+  align-items: center;
+  font-size: 0.85em; /* Slightly smaller than main title */
+  color: var(--text-muted); /* Use the muted text color from theme */
+}
+
+.status-indicator-chat {
+  display: inline-block;
+  width: 8px; /* Smaller dot */
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px; /* Small space between dot and text */
+}
+
+.status-indicator-chat.online {
+  background-color: #4caf50; /* Green for online - consistent with theme */
+}
+
+.status-indicator-chat.offline {
+  background-color: #9e9e9e; /* Grey for offline - consistent with theme */
+}
+
+.status-text-chat {
+  /* Inherits font size and color from .online-status-chat */
+  font-size: 0.8em; /* Even smaller text for status */
+  font-weight: 500; /* Slightly bolder than default muted */
+}
+/* --- END NEW STYLES --- */
+
 
 .chat-messages-container {
   flex-grow: 1;

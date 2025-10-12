@@ -1,15 +1,16 @@
 // src/components/chat/Chat.jsx
-import React, { useState, useEffect, useRef } from 'react';
-import io from 'socket.io-client';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+// Remove io import since we're using the passed socket
+// import io from 'socket.io-client';
 import axios from 'axios';
 import './Chat.css';
 
-const SOCKET_SERVER_URL = 'http://localhost:3001';
+// Remove the constant SOCKET_SERVER_URL
+// const SOCKET_SERVER_URL = 'http://localhost:3001';
 const LARAVEL_API_BASE_URL = 'http://localhost:8000/api';
 
-// Accept the onViewProfile prop
-const Chat = ({ sanctumToken, currentUserId, otherUserId, otherUserName, onViewProfile }) => { // <-- Accept onViewProfile
-    const [socket, setSocket] = useState(null);
+// Accept the onViewProfile, onlineUsers, isOtherUserOnline, and socket props
+const Chat = ({ sanctumToken, currentUserId, otherUserId, otherUserName, onViewProfile, onlineUsers, isOtherUserOnline, socket }) => { // <-- Accept socket prop
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [loadingHistory, setLoadingHistory] = useState(false);
@@ -23,6 +24,7 @@ const Chat = ({ sanctumToken, currentUserId, otherUserId, otherUserName, onViewP
         scrollToBottom();
     }, [messages]);
 
+    // Fetch message history
     useEffect(() => {
         const fetchMessageHistory = async () => {
             setMessages([]);
@@ -60,27 +62,20 @@ const Chat = ({ sanctumToken, currentUserId, otherUserId, otherUserName, onViewP
         fetchMessageHistory();
     }, [sanctumToken, currentUserId, otherUserId]);
 
+    // Join chat room and set up listeners using the passed socket
     useEffect(() => {
-
-        if (!sanctumToken || !currentUserId || !otherUserId) {
-            console.error("Chat: Missing required props for socket connection (sanctumToken, currentUserId, otherUserId)");
+        if (!socket || !currentUserId || !otherUserId) {
+            console.warn("Chat: Missing socket or user IDs, cannot setup chat listeners.");
             return;
         }
 
-        console.log(`Chat: Initializing socket connection with user ID ${otherUserId}`);
+        console.log(`Chat: Setting up listeners and joining chat room with user ID ${otherUserId} using main socket.`);
 
-        const socketInstance = io(SOCKET_SERVER_URL, {
-            auth: { token: sanctumToken },
-            withCredentials: true
-        });
+        // Join the specific chat room for this conversation
+        socket.emit('joinChat', { otherUserId });
 
-        socketInstance.on('connect', () => {
-            console.log('Chat: Connected to server with socket ID:', socketInstance.id);
-            setSocket(socketInstance);
-            socketInstance.emit('joinChat', { otherUserId });
-        });
-
-        socketInstance.on('receiveMessage', (message) => {
+        // Listener for receiving messages
+        const handleReceiveMessage = (message) => {
             console.log("Chat: Received message (real-time or confirmation):", message);
             setMessages(prevMessages => {
                 const alreadyExists = prevMessages.some(
@@ -105,27 +100,31 @@ const Chat = ({ sanctumToken, currentUserId, otherUserId, otherUserName, onViewP
                 }
             });
             scrollToBottom();
-        });
+        };
 
-        socketInstance.on('messageError', (data) => {
+        // Listener for message errors
+        const handleMessageError = (data) => {
             console.error("Chat: Error from server:", data.error);
             alert(`Chat Error: ${data.error}`);
-        });
-
-        socketInstance.on('disconnect', (reason) => {
-            console.log('Chat: Disconnected from server. Reason:', reason);
-        });
-
-        return () => {
-            console.log('Chat: Cleaning up socket connection');
-            if (socketInstance) {
-                socketInstance.disconnect();
-            }
         };
-    }, [sanctumToken, currentUserId, otherUserId]);
 
-    const handleSendMessage = () => {
-        if (newMessage.trim() && socket) {
+        // Attach listeners
+        socket.on('receiveMessage', handleReceiveMessage);
+        socket.on('messageError', handleMessageError);
+
+        // Cleanup: Remove listeners when component unmounts or dependencies change
+        return () => {
+            console.log('Chat: Cleaning up listeners');
+            socket.off('receiveMessage', handleReceiveMessage);
+            socket.off('messageError', handleMessageError);
+            // Note: We don't leave the room here as the socket might be used elsewhere,
+            // and the server handles disconnection cleanup automatically.
+        };
+    }, [socket, currentUserId, otherUserId]); // Re-run if socket, currentUserId, or otherUserId changes
+
+
+    const handleSendMessage = useCallback(() => { // Use useCallback for consistency
+        if (newMessage.trim() && socket) { // Use the passed socket
             const messageContent = newMessage.trim();
             const messageData = {
                 sender_id: currentUserId,
@@ -146,12 +145,12 @@ const Chat = ({ sanctumToken, currentUserId, otherUserId, otherUserName, onViewP
             scrollToBottom();
             setNewMessage('');
 
-            socket.emit('sendMessage', messageData);
-            console.log("Chat: Message emitted to server");
+            socket.emit('sendMessage', messageData); // Use the passed socket
+            console.log("Chat: Message emitted to server via main socket");
         } else if (!socket) {
-             console.warn("Chat: Cannot send message, no socket connection.");
+             console.warn("Chat: Cannot send message, no socket connection available.");
         }
-    };
+    }, [newMessage, socket, currentUserId, otherUserId]);
 
     const handleKeyPress = (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -176,11 +175,17 @@ const Chat = ({ sanctumToken, currentUserId, otherUserId, otherUserName, onViewP
                                 onViewProfile(otherUserId); // Call onViewProfile with the other user's ID
                             }
                         }}
-                        style={{ cursor: 'pointer', marginLeft: '5px', color: 'blue' }} // Basic styling
+                        style={{ cursor: 'pointer', marginLeft: '5px', color: '#646cff' }} // Use theme color
                         // Consider using a dedicated CSS class for better styling
                     >
                         {displayName}
                     </span>
+                    {/* --- DISPLAY ONLINE STATUS --- */}
+                    <span className={`online-status-chat ${isOtherUserOnline ? 'online' : 'offline'}`}>
+                        <span className="status-indicator-chat"></span>
+                        <span className="status-text-chat">{isOtherUserOnline ? 'Online' : 'Offline'}</span>
+                    </span>
+                    {/* --- END DISPLAY --- */}
                 </h3>
             </div>
 
@@ -217,11 +222,11 @@ const Chat = ({ sanctumToken, currentUserId, otherUserId, otherUserName, onViewP
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyPress={handleKeyPress}
                     placeholder={`Message ${displayName}...`}
-                    disabled={!socket || loadingHistory}
+                    disabled={!socket || loadingHistory} // Disable if no socket
                 />
                 <button
                     onClick={handleSendMessage}
-                    disabled={!newMessage.trim() || !socket || loadingHistory}
+                    disabled={!newMessage.trim() || !socket || loadingHistory} // Disable if no socket or empty message
                 >
                     Send
                 </button>

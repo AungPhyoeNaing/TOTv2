@@ -1,0 +1,95 @@
+/* src/components/profile/UserList.css */
+
+.profile-link {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  text-decoration: none;
+  color: inherit;
+  border: none;
+  background: none;
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+}
+
+.user-avatar-container {
+  position: relative;
+  flex-shrink: 0;
+}
+
+
+.online-status {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: white;
+  border-radius: 10px;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.status-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ccc;
+}
+
+.online .status-indicator {
+  background: #10b981;
+}
+
+.offline .status-indicator {
+  background: #9ca3af;
+}
+
+.status-text {
+  color: #4b5563;
+}
+
+.user-details {
+  flex-grow: 1;
+}
+
+.username {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.1rem;
+  color: #1f2937;
+}
+
+.email {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.no-users {
+  text-align: center;
+  padding: 2rem;
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .users-grid {
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem;
+  }
+  
+  .profile-link {
+    padding: 0.8rem;
+  }
+  
+  .user-avatar {
+    width: 50px;
+    height: 50px;
+  }
+}
