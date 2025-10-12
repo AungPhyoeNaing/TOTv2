@@ -692,6 +692,7 @@ export default function App() {
                 onViewProfile={viewProfile}
                 onlineUsers={onlineUsers}
       isOtherUserOnline={onlineUsers?.has(chatWithUser.id)} 
+      socket={socket}
                 
               />
             ) : (

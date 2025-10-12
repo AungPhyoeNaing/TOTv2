@@ -1,232 +1,280 @@
-/*********************************************************************
- *  Real-time Server – DRY / Optimised / Online Status
- *  Drop-in replacement – no new bugs
- *********************************************************************/
-require('dotenv').config();
 const express = require('express');
 const http = require('http');
-const { Server } = require('socket.io');
+const socketIo = require('socket.io');
 const cors = require('cors');
 const axios = require('axios');
 
 const app = express();
 const server = http.createServer(app);
 
-/* ---------- Constants ---------- */
-const EVENTS = {
-  USER_ONLINE: 'userOnline',
-  USER_OFFLINE: 'userOffline',
-  USER_JOINED: 'userJoined',
-  ONLINE_LIST: 'onlineList',
-  REACTION_UPDATED: 'reactionUpdated',
-  COMMENT_ADDED: 'commentAdded',
-  SEND_MESSAGE: 'sendMessage',
-  RECEIVE_MESSAGE: 'receiveMessage',
-  MESSAGE_SENT: 'messageSent',
-  MESSAGE_ERROR: 'messageError',
-};
-
-/* ---------- Middleware ---------- */
-app.use(express.json());
-app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
-
-/* ---------- Socket.IO ---------- */
-const io = new Server(server, {
-  cors: { origin: 'http://localhost:5173', methods: ['GET', 'POST'], credentials: true },
-  // Optional: add ping/pong timeout for faster disconnect detection
-  pingTimeout: 5000,
-  pingInterval: 10000,
+// Configure CORS for Socket.IO
+const io = new socketIo.Server(server, {
+    cors: {
+        origin: "http://localhost:5173", // Adjust if your frontend runs elsewhere
+        methods: ["GET", "POST"],
+        credentials: true
+    }
 });
 
-/* ---------- In-Memory Online Store (Supports Multiple Connections per User) ---------- */
-// { userId: Set<socketId> }
-const connectedUsers = new Map();
+// Store connected users (Supports multiple connections per user)
+const connectedUsers = new Map(); // { userId: Set<socketId> }
 
-/* ---------- DRY AXIOS INSTANCE ---------- */
-const laravel = axios.create({
-  baseURL: 'http://localhost:8000/api',
-  timeout: 5000,
-});
-laravel.interceptors.request.use((cfg) => {
-  const token = cfg.headers.common?.Authorization?.replace('Bearer ', '') || cfg.headers.Authorization;
-  if (token) cfg.headers.Authorization = `Bearer ${token}`;
-  return cfg;
-});
-
-/* ---------- Socket Authentication ---------- */
+// Middleware to authenticate socket connection using Sanctum
 io.use(async (socket, next) => {
-  const token = socket.handshake.auth?.token;
-  if (!token) {
-    return next(new Error('Missing authentication token'));
-  }
+    const token = socket.handshake.auth.token;
 
-  try {
-    const res = await laravel.get('/user', { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.data?.id) {
-      return next(new Error('Invalid user data from auth endpoint'));
-    }
-    socket.userId = res.data.id;
-    socket.authToken = token; // Store for reuse
-    next();
-  } catch (e) {
-    console.error(`[Auth] Failed for token (user unknown): ${e.message}`);
-    next(new Error('Invalid or expired token'));
-  }
-});
-
-/* ---------- Connection Handler ---------- */
-io.on('connection', (socket) => {
-  const uid = socket.userId;
-  console.log(`[Connect] User ${uid} via socket ${socket.id}`);
-
-  // Add socket to user's connection set
-  if (!connectedUsers.has(uid)) {
-    connectedUsers.set(uid, new Set());
-  }
-  connectedUsers.get(uid).add(socket.id);
-
-  // 1️⃣ Broadcast that this user is online (only if first connection)
-  if (connectedUsers.get(uid).size === 1) {
-    socket.broadcast.emit(EVENTS.USER_ONLINE, { userId: uid });
-  }
-
-  // 2️⃣ Send current online list (user IDs only)
-  const onlineUserIds = Array.from(connectedUsers.keys()).map(Number);
-  socket.emit(EVENTS.ONLINE_LIST, onlineUserIds);
-
-  /* ---------- Chat Room Join ---------- */
-  socket.on('joinChat', ({ otherUserId }) => {
-    if (typeof otherUserId !== 'number' || otherUserId <= 0) return;
-    const room = `chat_${[uid, otherUserId].sort((a, b) => a - b).join('_')}`;
-    socket.join(room);
-    console.log(`[Chat] ${uid} joined room ${room}`);
-  });
-
-  /* ---------- Reaction Update ---------- */
-  socket.on('postReactionUpdated', async ({ postId }) => {
-    if (typeof postId !== 'number' || postId <= 0) return;
-
-    try {
-      // Fetch only the specific post (not all posts!)
-      const [myReactRes, postRes] = await Promise.all([
-        laravel.get(`/posts/${postId}/my-reaction`, { headers: { Authorization: `Bearer ${socket.authToken}` } }),
-        laravel.get(`/posts/${postId}`, { headers: { Authorization: `Bearer ${socket.authToken}` } })
-      ]);
-
-      const post = postRes.data;
-      if (!post || post.id !== postId) return;
-
-      const likes = post.likes_count ?? 0;
-      const sads = post.sads_count ?? 0;
-      const angries = post.angries_count ?? 0;
-
-      io.emit(EVENTS.REACTION_UPDATED, {
-        post_id: postId,
-        likes_count: likes,
-        sads_count: sads,
-        angries_count: angries,
-        reactions_count: likes + sads + angries,
-        user_reaction: myReactRes.data?.type || null
-      });
-    } catch (e) {
-      console.error(`[Reaction] Failed for post ${postId}, user ${uid}:`, e.message);
-    }
-  });
-
-  /* ---------- Comment Added ---------- */
-  socket.on('postCommentAdded', ({ postId, comment }) => {
-    if (typeof postId !== 'number' || postId <= 0 || !comment || typeof comment !== 'object') return;
-    if (!comment.content || typeof comment.content !== 'string') return;
-
-    io.emit(EVENTS.COMMENT_ADDED, { ...comment, post_id: postId });
-  });
-
-  /* ---------- Send Message ---------- */
-  socket.on(EVENTS.SEND_MESSAGE, async (msg) => {
-    if (!msg || msg.sender_id !== uid) {
-      return socket.emit(EVENTS.MESSAGE_ERROR, { error: 'Unauthorized' });
-    }
-
-    const { recipient_id: recipientId } = msg;
-    if (typeof recipientId !== 'number' || recipientId <= 0) {
-      return socket.emit(EVENTS.MESSAGE_ERROR, { error: 'Invalid recipient' });
+    if (!token) {
+        return next(new Error("Authentication error: No token provided"));
     }
 
     try {
-      // Check mutual follow
-      const followRes = await laravel.get(`/users/${uid}/is-mutual-follow/${recipientId}`, {
-        headers: { Authorization: `Bearer ${socket.authToken}` }
-      });
-
-      if (!followRes.data?.is_mutual_follow) {
-        return socket.emit(EVENTS.MESSAGE_ERROR, { error: 'Not mutual followers' });
-      }
-
-      // Save message
-      const savedRes = await laravel.post('/messages', msg, {
-        headers: { Authorization: `Bearer ${socket.authToken}` }
-      });
-
-      // Deliver to all active recipient sockets
-      const recipientSockets = connectedUsers.get(recipientId);
-      if (recipientSockets && recipientSockets.size > 0) {
-        recipientSockets.forEach(sid => {
-          io.to(sid).emit(EVENTS.RECEIVE_MESSAGE, savedRes.data);
+        // Verify token by calling Laravel's user endpoint
+        const response = await axios.get('http://localhost:8000/api/user', {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+            },
+            timeout: 5000
         });
-      }
 
-      socket.emit(EVENTS.MESSAGE_SENT, savedRes.data);
-    } catch (e) {
-      console.error(`[Message] Failed from ${uid} to ${recipientId}:`, e.message);
-      socket.emit(EVENTS.MESSAGE_ERROR, { error: 'Failed to send message' });
+        socket.userId = response.data.id; // Assuming user ID is in response
+        console.log(`[Auth] Authenticated user ID: ${socket.userId}`);
+        next();
+    } catch (error) {
+        console.error("[Auth] Sanctum Authentication Error:", error.message);
+        next(new Error("Authentication error: Invalid token"));
     }
-  });
-
-  /* ---------- Disconnect Handler ---------- */
-  socket.on('disconnect', () => {
-    console.log(`[Disconnect] User ${uid} (socket ${socket.id})`);
-
-    const userSockets = connectedUsers.get(uid);
-    if (userSockets) {
-      userSockets.delete(socket.id);
-      if (userSockets.size === 0) {
-        connectedUsers.delete(uid);
-        socket.broadcast.emit(EVENTS.USER_OFFLINE, { userId: uid });
-      }
-    }
-  });
 });
 
-/* ---------- Laravel → Node Ping Route ---------- */
+io.on('connection', (socket) => {
+    const userId = socket.userId;
+    console.log(`[Connection] User connected: ${userId} with socket ID: ${socket.id}`);
+
+    // Add socket to user's connection set
+    if (!connectedUsers.has(userId)) {
+        connectedUsers.set(userId, new Set());
+    }
+    connectedUsers.get(userId).add(socket.id);
+
+    // 1. Broadcast that this user is online (only if first connection for this user)
+    if (connectedUsers.get(userId).size === 1) {
+        socket.broadcast.emit('userOnline', { userId: userId });
+    }
+
+    // 2. Send current online list to the newly connected user
+    const onlineUserIds = Array.from(connectedUsers.keys()).map(Number);
+    socket.emit('onlineList', onlineUserIds);
+
+    socket.on('joinChat', (data) => {
+        const userIds = [socket.userId, data.otherUserId].sort();
+        const roomName = `chat_${userIds[0]}_${userIds[1]}`;
+        socket.join(roomName);
+        console.log(`[Chat] User ${socket.userId} joined room ${roomName}`);
+    });
+
+    
+    socket.on('postReactionUpdated', async (data) => {
+        console.log(`[Reaction] Update notification for post ${data.postId} from user ${socket.userId}:`, data);
+
+        if (!data.postId) {
+            console.error("[Reaction] Missing postId in postReactionUpdated data:", data);
+            return;
+        }
+
+        try {
+            // --- Fetch latest data from Laravel ---
+            // 1. Get the current user's reaction for this post
+            const userReactionRes = await axios.get(`http://localhost:8000/api/posts/${data.postId}/my-reaction`, {
+                headers: { 'Authorization': `Bearer ${socket.handshake.auth.token}` },
+                timeout: 5000
+            });
+
+            const currentUserReaction = userReactionRes.data.type || null;
+
+            // 2. Get the post details to get the latest counts
+            // Note: Fetching all posts might be inefficient for large lists.
+            const postsRes = await axios.get(`http://localhost:8000/api/posts`, {
+                 headers: { 'Authorization': `Bearer ${socket.handshake.auth.token}` },
+                 timeout: 5000
+            });
+
+            // Find the specific post in the list
+            const post = postsRes.data.find(p => p.id == data.postId);
+
+            if (!post) {
+                console.error(`[Reaction] Post with ID ${data.postId} not found in /api/posts response.`);
+                return;
+            }
+
+            // Ensure counts are available on the post object
+            const likesCount = post.likes_count ?? 0;
+            const sadsCount = post.sads_count ?? 0;
+            const angriesCount = post.angries_count ?? 0;
+            const totalReactions = post.reactions_count ?? (likesCount + sadsCount + angriesCount);
+
+            // --- Prepare payload for clients ---
+            const reactionUpdatePayload = {
+                post_id: data.postId,
+                likes_count: likesCount,
+                sads_count: sadsCount,
+                angries_count: angriesCount,
+                reactions_count: totalReactions,
+                user_reaction: currentUserReaction
+            };
+
+            // --- Emit the event to all connected clients ---
+            io.emit('reactionUpdated', reactionUpdatePayload);
+            console.log("[Reaction] Emitted 'reactionUpdated' to all clients:", reactionUpdatePayload);
+
+        } catch (error) {
+            console.error(`[Reaction] Error fetching updated data for post ${data.postId}:`, error.response?.data || error.message);
+        }
+    });
+  
+    socket.on('postCommentAdded', async (data) => {
+        console.log(`[Comment] Added notification for post ${data.postId} from user ${socket.userId}:`, data);
+
+        if (!data.postId || !data.comment) {
+             console.error("[Comment] Invalid comment data received in postCommentAdded:", data);
+             return;
+        }
+
+        try {
+            // --- Prepare the comment data for clients ---
+            // The client is expected to send the full comment object returned by the Laravel API
+            const newComment = data.comment;
+
+            // Ensure it has the post_id for the frontend listener
+            if (!newComment.post_id) {
+                newComment.post_id = data.postId; // Attach post_id if missing
+            }
+
+            // --- ADDITIONAL LOGGING FOR DEBUGGING ---
+            console.log(`[Comment] [Server] About to emit 'commentAdded' to all clients for comment:`, newComment);
+            // --- Emit the event to all connected clients ---
+            io.emit('commentAdded', newComment);
+            console.log(`[Comment] [Server] Emitted 'commentAdded' to all clients.`);
+
+        } catch (error) {
+             console.error(`[Comment] Error processing new comment notification for post ${data.postId}:`, error.response?.data || error.message);
+        }
+    });
+    // --- End Event Listener ---
+
+
+    socket.on('sendMessage', async (messageData) => {
+    console.log('[Message] Received message ', messageData);
+
+    try {
+        // Validate sender
+        if (messageData.sender_id != socket.userId) {
+           console.error("[Message] Sender ID mismatch");
+           return socket.emit('messageError', { error: 'Unauthorized sender' });
+        }
+
+        // --- NEW: Check Mutual Follow Status BEFORE saving ---
+        const senderId = messageData.sender_id;
+        const recipientId = messageData.recipient_id;
+
+        // Call Laravel API to check mutual follow
+        // You need to create this endpoint in Laravel
+        const followCheckResponse = await axios.get(
+            `http://localhost:8000/api/users/${senderId}/is-mutual-follow/${recipientId}`,
+            {
+                headers: {
+                    'Authorization': `Bearer ${socket.handshake.auth.token}`,
+                },
+                timeout: 5000
+            }
+        );
+
+        // Assuming the Laravel endpoint returns { is_mutual_follow: true/false }
+        const isMutualFollow = followCheckResponse.data.is_mutual_follow;
+
+        if (!isMutualFollow) {
+            console.log(`[Message] Message blocked. Users ${senderId} and ${recipientId} are not mutual followers.`);
+            // Emit error back to the sender
+            return socket.emit('messageError', { error: 'You can only message users you mutually follow.' });
+         
+        }
+        // --- END NEW CHECK ---
+
+        // 1. Save message to Laravel database via API (only if mutual follow check passes)
+        const response = await axios.post('http://localhost:8000/api/messages', messageData, {
+            headers: {
+                'Authorization': `Bearer ${socket.handshake.auth.token}`,
+            },
+            timeout: 5000
+        });
+
+        const savedMessage = response.data;
+        console.log("[Message] Message saved to DB:", savedMessage);
+
+        // 2. Broadcast message to the relevant room/users
+        const userIds = [savedMessage.sender_id, savedMessage.recipient_id].sort();
+        const roomName = `chat_${userIds[0]}_${userIds[1]}`;
+
+        // Deliver to all active recipient sockets
+        const recipientSockets = connectedUsers.get(recipientId);
+        if (recipientSockets && recipientSockets.size > 0) {
+            recipientSockets.forEach(socketId => {
+                io.to(socketId).emit('receiveMessage', savedMessage);
+            });
+            console.log(`[Message] Message sent to recipient ${recipientId}`);
+        } else {
+             console.log(`[Message] Recipient ${recipientId} is offline`);
+        }
+
+        // Also send confirmation back to sender
+        socket.emit('messageSent', savedMessage);
+
+    } catch (error) {
+       
+        if (error.response && error.response.status === 403) {
+             // Assume 403 is from our mutual follow check endpoint
+             console.log("[Message] Mutual follow check failed:", error.response?.data?.error || error.message);
+           
+             socket.emit('messageError', { error: error.response?.data?.error || 'Messaging restricted by follow rules.' });
+        } else {
+            console.error("[Message] Error processing message:", error.response?.data || error.message);
+            socket.emit('messageError', { error: 'Failed to send message' });
+        }
+    }
+});
+
+    socket.on('disconnect', () => {
+        console.log(`[Disconnection] User disconnected: ${userId}`);
+        
+        const userSockets = connectedUsers.get(userId);
+        if (userSockets) {
+            userSockets.delete(socket.id);
+            if (userSockets.size === 0) {
+                connectedUsers.delete(userId);
+                socket.broadcast.emit('userOffline', { userId: userId });
+            }
+        }
+    });
+});
+app.use(express.json()); // Make sure you have this middleware
+
 app.post('/api/notify-login', (req, res) => {
-  if (req.headers['x-api-key'] !== process.env.NODE_SERVER_KEY) {
-    return res.status(403).json({ error: 'Forbidden' });
-  }
-  if (!req.body?.user?.id || typeof req.body.user.id !== 'number') {
-    return res.status(400).json({ error: 'Invalid user' });
-  }
+    const apiKey = req.headers['x-api-key'];
+    if (apiKey !== process.env.NODE_SERVER_KEY) {
+        return res.status(403).json({ error: 'Forbidden' });
+    }
 
-  io.emit(EVENTS.USER_JOINED, req.body.user);
-  res.json({ success: true });
+    const { user } = req.body;
+
+    if (!user || !user.id) {
+        return res.status(400).json({ error: 'Invalid user data' });
+    }
+
+    // ✅ BROADCAST TO ALL CONNECTED CLIENTS
+    io.emit('userJoined', user);
+    console.log(`[User Presence] Broadcasted userJoined for:`, user.name);
+
+    res.json({ success: true });
 });
-
-/* ---------- Graceful Shutdown ---------- */
-process.on('SIGTERM', () => {
-  console.log('[Server] SIGTERM received. Shutting down gracefully...');
-  server.close(() => {
-    console.log('[Server] Closed.');
-    process.exit(0);
-  });
-});
-
-process.on('SIGINT', () => {
-  console.log('[Server] SIGINT received. Shutting down gracefully...');
-  server.close(() => {
-    console.log('[Server] Closed.');
-    process.exit(0);
-  });
-});
-
-/* ---------- Start Server ---------- */
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => console.log(`[Server] Running on port ${PORT}`));
+server.listen(PORT, () => {
+    console.log(`[Server] Server (Chat + Real-time Updates) running on port ${PORT}`);
+});
