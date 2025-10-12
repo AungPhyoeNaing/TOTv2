@@ -7,23 +7,64 @@
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-.post-header {
+/* Updated: Target the inner wrapper */
+.post-header > div {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 12px; /* Better than margin */
   margin-bottom: 8px;
+}
+
+.post-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #e4e6eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  font-weight: bold;
+  color: #65676b;
+  font-size: 18px;
+}
+
+.post-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.post-header-info {
+  flex: 1;
+}
+
+.post-header-info strong {
+  display: block;
   font-weight: 600;
   font-size: 1.1em;
 }
 
-.shared-badge {
+.post-header-info small {
+  color: #657786;
+  font-size: 0.85em;
+}
+
+.shared-indicator {
   background: #e8f5fe;
   color: #0366d6;
   padding: 2px 8px;
   border-radius: 12px;
   font-size: 0.8em;
   font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
 }
+
+/* Rest remains mostly the same */
 
 .post-body p {
   margin: 8px 0;
@@ -31,7 +72,7 @@
   white-space: pre-wrap;
 }
 
-.shared-post {
+.shared-post-container {
   background: #f8f9fa;
   padding: 12px;
   border-radius: 8px;
@@ -48,9 +89,7 @@
   font-size: 0.85em;
 }
 
-.reactions span,
-.engagement span {
-  margin-right: 12px;
+.post-stats span {
   font-weight: 500;
 }
 

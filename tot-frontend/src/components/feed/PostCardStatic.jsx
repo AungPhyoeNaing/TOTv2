@@ -1,5 +1,6 @@
 import React from "react";
-import "./Post.css"; // 👈 Reuse existing Post styling
+//import "./Post.css"; // 👈 Reuse existing Post styling
+import "./PostCardStatic.css"; // 👈 New CSS for PostCardStatic
 
 const PostCardStatic = ({ post }) => {
   const likes = post.likes_count || 0;
@@ -102,7 +103,11 @@ const PostCardStatic = ({ post }) => {
       <div className="post-header">
         <div>
           <div className="post-avatar">
-            {userInitial}
+           <img
+                      src={post.user.avatar || "https://placehold.co/80x80  "} 
+                      alt={`${post.user.name}'s avatar`}
+                      className="user-avatar"
+                    />
           </div>
           <div className="post-header-info">
             <strong>{post.user?.name || 'Unknown User'}</strong>
