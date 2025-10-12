@@ -1,3 +1,4 @@
+// src/components/Feed.jsx (Updated - no more category filtering UI)
 import React, { useState, useEffect } from "react";
 import CreatePostForm from "./CreatePostForm.jsx";
 import Post from "./Post.jsx";
@@ -11,11 +12,9 @@ const Feed = ({
   socket,
   onViewProfile,
   categories,
+  selectedCats // Receive filtered posts from parent
 }) => {
   const [selectedPost, setSelectedPost] = useState(null);
-  const [selectedCats, setSelectedCats] = useState([]); // empty = all
-  const [showFilters, setShowFilters] = useState(false);
-  const [showPills, setShowPills] = useState(false);
 
   useEffect(() => {
     if (selectedPost) {
@@ -23,11 +22,7 @@ const Feed = ({
     }
   }, [selectedPost]);
 
-  const toggleCat = (id) =>
-    setSelectedCats((prev) =>
-      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
-    );
-
+  // Filter posts based on selected categories passed from parent
   const filtered =
     selectedCats.length === 0
       ? posts
@@ -74,33 +69,7 @@ const Feed = ({
       <hr />
       <h4>Feed</h4>
 
-     {/* ---- GLASS POP PILLS ---- */}
-<button
-  className="cat-glass-trigger"
-  onMouseEnter={() => setShowPills(true)}
-  onClick={() => setShowPills((v) => !v)} 
->
-  Categories
-</button>
-
-<div className="glass-pills-list">
-  {categories?.length > 0 &&
-    categories.map((c, i) => (
-      <label
-        key={c.id}
-        className={`glass-pill ${showPills ? "pop" : ""}`}
-        style={{ transitionDelay: `${i * 60}ms` }} // stagger
-      >
-        <input
-          type="checkbox"
-          checked={selectedCats.includes(c.id)}
-          onChange={() => toggleCat(c.id)}
-        />
-        <span>{c.name}</span>
-      </label>
-    ))}
-</div>
-
+      {/* Removed the category filter UI - now in Header */}
       <div className="posts-grid">
         {filtered.length ? (
           filtered.map((post) => (

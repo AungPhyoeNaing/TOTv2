@@ -1,3 +1,4 @@
+// src/App.jsx (Updated with category filtering state)
 import React, { useState, useEffect } from "react";
 import io from "socket.io-client"; // <-- Import Socket.IO Client
 import apiClient from "./api/apiClient";
@@ -30,6 +31,7 @@ export default function App() {
   const [currentView, setCurrentView] = useState('feed');
   const [profileUser, setProfileUser] = useState(null);
   const [chatWithUser, setChatWithUser] = useState(null);
+  
   const [profileData, setProfileData] = useState({
     followers: [],
     following: []
@@ -45,6 +47,16 @@ export default function App() {
   // --- State for Socket.IO connection ---
   const [socket, setSocket] = useState(null);
   // --- End Socket.IO state ---
+
+  // --- NEW STATE: For category filtering ---
+  const [selectedCats, setSelectedCats] = useState([]);
+  const [showPills, setShowPills] = useState(false);
+  // --- END NEW STATE ---
+
+  const toggleCat = (id) =>
+    setSelectedCats((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
+    );
 
   // --- NEW HANDLERS: For navigating to new views ---
   const handleSwitchToPasswordResetRequest = () => {
@@ -107,6 +119,9 @@ export default function App() {
       setProfileUser(null);
       setProfileData({ followers: [], following: [] });
       setProfileLoading(false);
+      // Reset category filters on logout
+      setSelectedCats([]);
+      setShowPills(false);
     }
   };
 
@@ -525,6 +540,12 @@ export default function App() {
             onGoToEditProfile={handleGoToEditProfile} // Pass the new handler
             onGoToChat={() => setCurrentView('chat')}
             onLogout={handleLogout}
+            // Pass category state and functions
+            categories={categories}
+            selectedCats={selectedCats}
+            toggleCat={toggleCat}
+            showPills={showPills}
+            setShowPills={setShowPills}
         />
         <main className="centered-main">
           <article aria-busy="true"></article>
@@ -545,6 +566,12 @@ export default function App() {
         onGoToEditProfile={handleGoToEditProfile} // Pass the new handler
         onGoToChat={() => setCurrentView('chat')}
         onLogout={handleLogout}
+        // Pass category state and functions
+        categories={categories}
+        selectedCats={selectedCats}
+        toggleCat={toggleCat}
+        showPills={showPills}
+        setShowPills={setShowPills}
       />
 
       <main className="centered-main">
@@ -577,6 +604,8 @@ export default function App() {
                 socket={socket}
                 onViewProfile={viewProfile}
                 onReportUser={handleSwitchToReportUser} // Pass the handler to Feed component if needed for post reports
+                // Pass selected categories to Feed for filtering
+                selectedCats={selectedCats}
               />
               <UserList
                 users={usersList}
