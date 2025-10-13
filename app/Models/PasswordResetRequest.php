@@ -23,6 +23,9 @@ class PasswordResetRequest extends Model
         'status',
         'admin_id',
         'processed_at',
+        // NEW: Add the verification code fields to fillable
+        'verification_code',
+        'verification_code_expires_at',
     ];
 
     /**
@@ -34,6 +37,8 @@ class PasswordResetRequest extends Model
         'processed_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        // NEW: Cast the verification code expiry to a datetime
+        'verification_code_expires_at' => 'datetime',
     ];
 
     /**
@@ -42,5 +47,16 @@ class PasswordResetRequest extends Model
     public function admin(): BelongsTo
     {
         return $this->belongsTo(User::class, 'admin_id');
+    }
+
+    /**
+     * Get the user associated with this password reset request.
+     * Assumes the 'email' column in password_reset_requests matches the 'email' column in users table.
+     */
+    public function user(): BelongsTo
+    {
+        // Foreign key in PRR table -> email
+        // Foreign key in User table -> email
+        return $this->belongsTo(User::class, 'email', 'email');
     }
 }

@@ -815,14 +815,18 @@ async function handleDeletePost(postId) {
                                                 <!-- Action buttons for pending requests -->
                                                 <div class="mt-4 flex space-x-2" id="action-buttons-{{ $request->id }}"> <!-- Add an ID to the action buttons container -->
                                                     <!-- Remove the forms and use standalone buttons with onclick handlers -->
-                                                    <button type="button" class="text-xs bg-green-500 hover:bg-green-700 text-white py-1 px-2 rounded"
+                                                    {{-- <button type="button" class="text-xs bg-green-500 hover:bg-green-700 text-white py-1 px-2 rounded"
                                                             onclick="handlePasswordRequestAction({{ $request->id }}, 'approve')">
                                                         Approve
-                                                    </button>
+                                                    </button> --}}
                                                     <button type="button" class="text-xs bg-red-500 hover:bg-red-700 text-white py-1 px-2 rounded"
                                                             onclick="handlePasswordRequestAction({{ $request->id }}, 'reject')">
                                                         Reject
-                                                    </button>
+                                                    </button> 
+                                                    <a href="{{ route('admin.view-password-reset-request', $request->id) }}"
+               class="text-xs bg-blue-500 hover:bg-blue-700 text-white py-1 px-2 rounded inline-block">
+                Process
+            </a>
                                                 </div>
                                             @else
                                                 <!-- Show who processed it and when, if processed -->

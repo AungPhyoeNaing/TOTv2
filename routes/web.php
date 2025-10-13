@@ -1,5 +1,7 @@
 <?php
 
+// routes/web.php
+
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\EmailTestController;
@@ -43,8 +45,18 @@ Route::middleware(['admin'])->group(function () {
     // Managing Password Reset Requests
     Route::post('/admin/password-reset/{id}/approve', [AdminController::class, 'approvePasswordReset'])->name('admin.approve-password-reset');
     Route::post('/admin/password-reset/{id}/reject', [AdminController::class, 'rejectPasswordReset'])->name('admin.reject-password-reset');
+    Route::post('/admin/password-reset/{id}/send-code', [AdminController::class, 'sendPasswordResetCode'])->name('admin.send-password-reset-code');
+    // NEW: Route for viewing and processing a specific request (Add this line)
+    Route::get('/admin/password-reset/{id}/view', [AdminController::class, 'viewPasswordResetRequest'])->name('admin.view-password-reset-request');
 });
 
+// --- NEW: Routes for the actual password reset process (outside admin middleware) ---
+// Route to show the password reset form (receives email and code via query params)
+Route::get('/reset-password-page', [AdminController::class, 'showResetForm'])->name('password.reset.form');
+
+// Route to handle the password reset submission
+Route::post('/reset-password', [AdminController::class, 'resetPassword'])->name('password.reset');
+// --- END NEW ROUTES ---
 
 Route::get('/test-email', function () {
     return view('test-email');

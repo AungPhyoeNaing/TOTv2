@@ -7,6 +7,10 @@ use App\Models\UserReport; // Import the UserReport model
 use App\Models\User; // Import the User model
 use App\Models\Post; // Import the Post model
 use App\Models\PasswordResetRequest; // Import the PasswordResetRequest model
+use Illuminate\Support\Facades\Mail;
+use Exception;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Hash; // Import Hash facade for password hashing
 
 class AdminController extends Controller
 {
@@ -160,52 +164,221 @@ class AdminController extends Controller
      * Approve a password reset request.
      */
     public function approvePasswordReset($id)
-{
-    if (!session('admin_logged_in')) {
-        return redirect()->route('admin.login')->withErrors(['error' => 'Please log in first.']);
+    {
+        if (!session('admin_logged_in')) {
+            return redirect()->route('admin.login')->withErrors(['error' => 'Please log in first.']);
+        }
+
+        $request = PasswordResetRequest::findOrFail($id);
+        if ($request->status !== 'pending') {
+            return back()->withErrors(['error' => 'Request is not pending.']);
+        }
+
+        $request->update([
+            'status' => 'approved',
+            'admin_id' => session('admin_id'), // This now stores the string 'tot-admin-XX'
+            'processed_at' => now(),
+        ]);
+
+        // Optionally, send an email to the user's recovery email here
+        // Example: Mail::to($request->recovery_email)->send(new PasswordResetApprovedMail($request));
+
+        return redirect()->route('admin.panel')->with('message', 'Password reset request approved.');
     }
 
-    $request = PasswordResetRequest::findOrFail($id);
-    if ($request->status !== 'pending') {
-        return back()->withErrors(['error' => 'Request is not pending.']);
+    /**
+     * Show the page to view and process a specific password reset request.
+     * Requires admin authentication.
+     */
+    public function viewPasswordResetRequest($id)
+    {
+        // Check if admin is logged in using session
+        if (!session('admin_logged_in')) {
+            return redirect()->route('admin.login')->withErrors(['error' => 'Please log in first.']);
+        }
+
+        // Find the specific password reset request by ID
+        $request = PasswordResetRequest::with('user')->findOrFail($id); // Assuming a 'user' relationship exists, optional
+
+        // Return the new Blade view, passing the request data
+        return view('admin_process_password_request', compact('request'));
     }
 
-    $request->update([
-        'status' => 'approved',
-        'admin_id' => session('admin_id'), // This now stores the string 'tot-admin-XX'
-        'processed_at' => now(),
-    ]);
+    /**
+     * Generate a code, save it with the request, and send an email.
+     * Requires admin authentication.
+     */
+    public function sendPasswordResetCode(Request $request, $id)
+    {
+        // Check if admin is logged in using session
+        if (!session('admin_logged_in')) {
+            return response()->json(['error' => 'Please log in first.'], 401); // Return JSON for potential AJAX
+        }
 
-    // Optionally, send an email to the user's recovery email here
-    // Example: Mail::to($request->recovery_email)->send(new PasswordResetApprovedMail($request));
+        // Find the specific password reset request by ID
+        $passwordRequest = PasswordResetRequest::findOrFail($id);
 
-    return redirect()->route('admin.panel')->with('message', 'Password reset request approved.');
-}
+        // Check if the request is still pending before proceeding
+        if ($passwordRequest->status !== 'pending') {
+            return back()->withErrors(['error' => 'Request is not pending and cannot be processed.']);
+        }
 
-/**
- * Reject a password reset request.
- */
-public function rejectPasswordReset($id)
-{
-    if (!session('admin_logged_in')) {
-        return redirect()->route('admin.login')->withErrors(['error' => 'Please log in first.']);
+        // Generate a unique 6-digit code (ensure uniqueness in DB)
+        $code = rand(100000, 999999);
+        // It's good practice to ensure uniqueness, potentially loop if needed or use a unique DB constraint
+        // For simplicity here, assuming rand is sufficient or DB handles uniqueness if needed later.
+        $expiresAt = now()->addHours(24); // Expires in 24 hours
+
+        // Update the request record with the code and expiry
+        $passwordRequest->update([
+            'verification_code' => $code,
+            'verification_code_expires_at' => $expiresAt,
+            'status' => 'code_sent', // This should work now that the enum includes 'code_sent'
+            'admin_id' => session('admin_id'), // Optionally log which admin triggered this
+            'processed_at' => now(), // Mark as processed when code is sent
+        ]);
+
+        // Prepare the email content
+        // IMPORTANT: Update the resetLink to point to your actual password reset page route
+        $resetLink = route('password.reset.form', ['email' => $passwordRequest->email, 'code' => $code]);
+        $subject = 'Your Password Reset Code for TOT';
+        $body = "Hello,
+
+A password reset request was made for your TOT account ({$passwordRequest->email}).
+
+Your verification code is: **{$code}**
+This code is valid for 24 hours.
+
+Please use this code on the password reset page to set a new password.
+If you did not request this, please ignore this email.
+
+Link (if supported by email clients): {$resetLink}
+
+Best regards,
+The TOT Team";
+
+        // Send the email using Laravel's Mail facade
+        try {
+            Mail::raw($body, function ($message) use ($passwordRequest, $subject) {
+                $message->to($passwordRequest->recovery_email) // Send to the recovery email provided in the request
+                        ->subject($subject);
+            });
+
+            // If the code reaches here, it means the email was likely accepted by the mail server.
+            // Note: This doesn't guarantee final delivery, just that Laravel handed it off successfully.
+            // Return success response (JSON is good for AJAX calls if you plan to make it async later)
+            return response()->json([
+                'message' => 'Verification code generated and sent successfully!',
+                'request_id' => $passwordRequest->id,
+                'code' => $code, // Potentially useful if you want to display it on the page after sending
+                'expires_at' => $expiresAt->format('Y-m-d H:i:s'),
+                'recovery_email' => $passwordRequest->recovery_email
+            ], 200);
+
+        } catch (Exception $e) { // Catch any exception during the sending process
+            // Log the error
+            Log::error('Failed to send password reset email: ' . $e->getMessage());
+
+            // If sending failed, it's good practice to revert the status update made earlier
+            // or mark it with a different status like 'code_generation_failed' or 'code_sent_failed'
+            $passwordRequest->update(['status' => 'pending']); // Revert status or set to a failed state
+
+            // Return error response
+            return response()->json(['error' => 'Failed to send email: ' . $e->getMessage()], 500);
+        }
     }
 
-    $request = PasswordResetRequest::findOrFail($id);
-    if ($request->status !== 'pending') {
-        return back()->withErrors(['error' => 'Request is not pending.']);
+    /**
+     * Reject a password reset request.
+     */
+    public function rejectPasswordReset($id)
+    {
+        if (!session('admin_logged_in')) {
+            return redirect()->route('admin.login')->withErrors(['error' => 'Please log in first.']);
+        }
+
+        $request = PasswordResetRequest::findOrFail($id);
+        if ($request->status !== 'pending') {
+            return back()->withErrors(['error' => 'Request is not pending.']);
+        }
+
+        $request->update([
+            'status' => 'rejected',
+            'admin_id' => session('admin_id'), // This now stores the string 'tot-admin-XX'
+            'processed_at' => now(),
+        ]);
+
+        // Optionally, send an email to the user's recovery email here
+        // Example: Mail::to($request->recovery_email)->send(new PasswordResetRejectedMail($request));
+
+        return redirect()->route('admin.panel')->with('message', 'Password reset request rejected.');
     }
 
-    $request->update([
-        'status' => 'rejected',
-        'admin_id' => session('admin_id'), // This now stores the string 'tot-admin-XX'
-        'processed_at' => now(),
-    ]);
+    // --- NEW METHODS FOR PASSWORD RESET FLOW ---
 
-    // Optionally, send an email to the user's recovery email here
-    // Example: Mail::to($request->recovery_email)->send(new PasswordResetRejectedMail($request));
+    /**
+     * Show the password reset form page.
+     * This page receives the email and code via query parameters.
+     */
+    public function showResetForm(Request $request)
+    {
+        $email = $request->query('email');
+        $code = $request->query('code');
 
-    return redirect()->route('admin.panel')->with('message', 'Password reset request rejected.');
-}
+        // Optional: Validate presence of email and code here if needed before showing the form
+        // You could also pre-validate the code against the database here, but it's often done on submission.
+
+        return view('reset-password-page', compact('email', 'code'));
+    }
+
+    /**
+     * Handle the password reset request.
+     * Validates the code and updates the user's password.
+     */
+    public function resetPassword(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email|exists:users,email', // Validate email exists in users table
+            'code' => 'required|string|size:6', // Validate code format
+            'password' => 'required|string|min:8|confirmed', // Validate new password
+        ]);
+
+        $email = $request->email;
+        $code = $request->code;
+        $newPassword = $request->password;
+
+        // Find the password reset request record
+        $resetRequest = PasswordResetRequest::where('email', $email)
+                                            ->where('verification_code', $code)
+                                            ->where('verification_code_expires_at', '>', now())
+                                            ->first();
+
+        if (!$resetRequest) {
+            return back()->withErrors(['code' => 'Invalid or expired verification code.']);
+        }
+
+        // Find the user
+        $user = User::where('email', $email)->first();
+
+        if (!$user) {
+            // This should ideally not happen if the email exists in the request table
+            Log::warning("User not found for email in reset request: {$email}");
+            return back()->withErrors(['email' => 'User associated with this email not found.']);
+        }
+
+        // Update the user's password
+        $user->password = Hash::make($newPassword); // Hash the new password
+        $user->save();
+
+        // Invalidate the used code (e.g., delete the request record)
+        $resetRequest->delete();
+
+        // Optionally, log the user in automatically here
+        // Auth::login($user);
+
+         return redirect('https://www.totumdy.com');
+    }
+
+    // --- END NEW METHODS ---
 
 }
