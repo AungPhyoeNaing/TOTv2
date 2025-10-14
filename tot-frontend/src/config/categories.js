@@ -7,4 +7,4 @@
 //   // Note: 'All' is typically a frontend filter option, not a stored category
 // ];
 
-// export default CATEGORIES;
+// export default CATEGORIES;   

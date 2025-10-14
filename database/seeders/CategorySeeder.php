@@ -17,6 +17,7 @@ class CategorySeeder extends Seeder
             ['name' => 'Memes', 'slug' => 'memes'],
             ['name' => 'Entertainment', 'slug' => 'entertainment'],
             ['name' => 'Study', 'slug' => 'study'],
+             ['name' => 'Announcement', 'slug' => 'announcements'],
             // Note: 'All' is typically a frontend filter option, not a stored category
         ];
 

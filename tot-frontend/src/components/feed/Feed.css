@@ -600,71 +600,7 @@
 }
 
 /* ---------- POP PILLS WRAPPER ---------- */
-.glass-pills-list {
-  position: relative;
-  margin-top: 0.8rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.7rem;
-  perspective: 600px; /* for 3-d flip */
-}
 
-/* ---------- SINGLE GLASS PILL ---------- */
-.glass-pill {
-  cursor: pointer;
-  opacity: 0;
-  transform: translateY(20px) rotateX(-25deg);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-}
-
-.glass-pill.pop {
-  opacity: 1;
-  transform: translateY(0) rotateX(0);
-}
-
-/* hide native checkbox */
-.glass-pill input {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-/* visible glassy span */
-.glass-pill span {
-  display: block;
-  padding: 0.5rem 1rem;
-  border-radius: 999px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  color: #fff;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  transition: background 0.25s ease, color 0.25s ease, border 0.25s ease,
-              box-shadow 0.25s ease, transform 0.2s ease;
-}
-
-/* hover lift */
-.glass-pill:hover span {
-  background: rgba(255, 255, 255, 0.25);
-  transform: translateY(-2px);
-}
-
-/* checked state – vibrant accent */
-.glass-pill input:checked + span {
-  background: rgba(255, 255, 255, 0.9);
-  color: #6c5ce7;
-  border-color: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 6px 24px rgba(108, 92, 231, 0.35);
-}
-
-/* subtle press */
-.glass-pill span:active {
-  transform: scale(0.96);
-}
 
 
 /* Mobile Responsive */

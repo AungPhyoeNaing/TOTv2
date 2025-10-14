@@ -1,7 +1,19 @@
-// src/components/layout/Header.jsx (Updated)
 import React from "react";
+import newsIcon from "../../assets/icons/news.png";
+import memesIcon from "../../assets/icons/memes.png";
+import entertainmentIcon from "../../assets/icons/entertainment.png";
+import studyIcon from "../../assets/icons/study.png";
+import announcementsIcon from "../../assets/icons/announcements.png";
+import "./Header.css"; 
 
-// Define the mapping between views and their header buttons
+const categoryIconMap = {
+  'News': newsIcon,
+  'Memes': memesIcon,
+  'Entertainment': entertainmentIcon,
+  'Study': studyIcon,
+  'Announcement': announcementsIcon,
+};
+
 const viewButtonMap = {
   feed: [
     { text: 'My Profile', handlerName: 'onGoToMyProfile' },
@@ -33,13 +45,10 @@ export default function Header({
   showPills,
   setShowPills
 }) {
-  // If no user is logged in, don't render the header content
   if (!user) return null;
 
-  // Get the button configuration for the current view
   const buttons = viewButtonMap[currentView] || viewButtonMap.feed;
 
-  // Create a mapping object for handler functions to make dynamic access easier
   const handlerMap = {
     onGoToFeed,
     onGoToMyProfile,
@@ -54,7 +63,6 @@ export default function Header({
           <li><strong>TOT</strong></li>
         </ul>
         <ul>
-          {/* Category filter button - only show on feed view */}
           {currentView === 'feed' && categories && categories.length > 0 && (
             <li>
               <button
@@ -65,7 +73,6 @@ export default function Header({
                 Categories
               </button>
               
-              {/* Category pills dropdown */}
               <div className="glass-pills-list">
                 {categories.map((c, i) => (
                   <label
@@ -77,8 +84,15 @@ export default function Header({
                       type="checkbox"
                       checked={selectedCats.includes(c.id)}
                       onChange={() => toggleCat(c.id)}
+                      className="glass-pill-checkbox"
                     />
-                    <span>{c.name}</span>
+                    <span className="icon-span">
+                      <img 
+                        src={categoryIconMap[c.name]} 
+                        alt={`${c.name} icon`} 
+                        className="category-icon" 
+                      />
+                    </span>
                   </label>
                 ))}
               </div>
@@ -96,7 +110,6 @@ export default function Header({
             </li>
           ))}
           
-          {/* Always show Logout */}
           <li>
             <button
               className="secondary outline logout-button"
