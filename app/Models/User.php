@@ -21,6 +21,8 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'recovery_email',
+        'avatar',
         'password',
     ];
 
@@ -47,5 +49,45 @@ class User extends Authenticatable
     public function posts(): HasMany
     {
         return $this->hasMany(Post::class);
+    }
+
+    /**
+     * Get the users that this user is following.
+     */
+    public function following()
+    {
+        return $this->belongsToMany(User::class, 'follows', 'follower_id', 'followee_id');
+    }
+
+    /**
+     * Get the users that are following this user.
+     */
+    public function followers()
+    {
+        return $this->belongsToMany(User::class, 'follows', 'followee_id', 'follower_id');
+    }
+
+    /**
+     * Follow the given user.
+     */
+    public function follow(User $user)
+    {
+        return $this->following()->attach($user);
+    }
+
+    /**
+     * Unfollow the given user.
+     */
+    public function unfollow(User $user)
+    {
+        return $this->following()->detach($user);
+    }
+
+    /**
+     * Check if the current user is following the given user.
+     */
+    public function isFollowing(User $user)
+    {
+        return $this->following()->where('followee_id', $user->id)->exists();
     }
 }
